@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 import { proxyCommand } from "./commands/proxy.js";
+import { httpProxyCommand } from "./commands/http-proxy.js";
 import { logsCommand } from "./commands/logs.js";
 import { keysCommand } from "./commands/keys.js";
 import { verifyCommand } from "./commands/verify.js";
@@ -14,6 +15,7 @@ const program = new Command()
   .description("Local security proxy for MCP tool calls");
 
 program.addCommand(proxyCommand);
+program.addCommand(httpProxyCommand);
 program.addCommand(logsCommand);
 program.addCommand(keysCommand);
 program.addCommand(verifyCommand);

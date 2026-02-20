@@ -4,28 +4,22 @@ import {
   openAuditDb,
   resolveDataDir,
 } from "@quint/core";
-import { Relay } from "./relay.js";
+import { HttpRelay } from "./http-relay.js";
 import { inspectRequest, inspectResponse, buildDenyResponse } from "./interceptor.js";
 import { AuditLogger } from "./logger.js";
 
-export { Relay } from "./relay.js";
-export { HttpRelay } from "./http-relay.js";
-export { inspectRequest, inspectResponse, buildDenyResponse } from "./interceptor.js";
-export { AuditLogger } from "./logger.js";
-export { startHttpProxy } from "./http-proxy.js";
-
-export interface ProxyOptions {
+export interface HttpProxyOptions {
   serverName: string;
-  command: string;
-  args: string[];
+  port: number;
+  targetUrl: string;
   policy: PolicyConfig;
 }
 
 /**
- * Start the proxy: spawn child MCP server, intercept all JSON-RPC
- * messages, enforce policy, sign and log everything.
+ * Start the HTTP proxy: run a local HTTP server, intercept all JSON-RPC
+ * requests, enforce policy, sign and log everything, forward to remote.
  */
-export function startProxy(opts: ProxyOptions): void {
+export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
   const dataDir = resolveDataDir(opts.policy.data_dir);
 
   // Ensure signing keys exist
@@ -37,12 +31,12 @@ export function startProxy(opts: ProxyOptions): void {
   // Create audit logger
   const logger = new AuditLogger(db, kp.privateKey, kp.publicKey, opts.policy);
 
-  // Create relay
-  const relay = new Relay(opts.command, opts.args);
+  // Create HTTP relay
+  const relay = new HttpRelay(opts.port, opts.targetUrl);
 
-  // ── Handle messages from parent (AI agent) → child (MCP server) ──
+  // ── Handle requests from agent → remote MCP server ──
 
-  relay.on("parentMessage", (line: string) => {
+  relay.on("request", (line: string, requestKey: string) => {
     const result = inspectRequest(line, opts.serverName, opts.policy);
 
     // Log the request
@@ -58,10 +52,10 @@ export function startProxy(opts: ProxyOptions): void {
     });
 
     if (result.verdict === "deny") {
-      // Send error response back to parent
+      // Send error response back to agent
       const reqId = result.message && "id" in result.message ? result.message.id : null;
       const errorResponse = buildDenyResponse(reqId ?? null);
-      relay.sendToParent(errorResponse);
+      relay.respondToClient(requestKey, errorResponse);
 
       // Log the synthetic deny response
       logger.log({
@@ -75,14 +69,14 @@ export function startProxy(opts: ProxyOptions): void {
         verdict: "deny",
       });
     } else {
-      // Forward to child
-      relay.sendToChild(line);
+      // Forward to remote server
+      relay.forwardToRemote(requestKey);
     }
   });
 
-  // ── Handle messages from child (MCP server) → parent (AI agent) ──
+  // ── Handle responses from remote MCP server ──
 
-  relay.on("childMessage", (line: string) => {
+  relay.on("response", (line: string) => {
     const result = inspectResponse(line);
 
     // Log the response
@@ -96,24 +90,27 @@ export function startProxy(opts: ProxyOptions): void {
       responseJson: result.responseJson,
       verdict: "passthrough",
     });
-
-    // Always forward responses to parent
-    relay.sendToParent(line);
   });
 
-  // ── Handle child exit ──
-
-  relay.on("childExit", (code: number | null) => {
-    db.close();
-    process.exit(code ?? 0);
-  });
+  // ── Handle errors ──
 
   relay.on("error", (err: Error) => {
-    process.stderr.write(`quint: relay error: ${err.message}\n`);
-    db.close();
-    process.exit(1);
+    process.stderr.write(`quint: http-proxy error: ${err.message}\n`);
   });
 
-  // Start
-  relay.start();
+  // Handle shutdown
+  const shutdown = () => {
+    relay.stop();
+    db.close();
+    process.exit(0);
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+
+  // Start listening
+  await relay.start();
+  process.stderr.write(
+    `quint: HTTP proxy listening on http://localhost:${opts.port} → ${opts.targetUrl}\n`,
+  );
 }
