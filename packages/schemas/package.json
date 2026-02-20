@@ -1,0 +1,6 @@
+{
+  "name": "@quint/schemas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Protobuf schema definitions for Quint services"
+}

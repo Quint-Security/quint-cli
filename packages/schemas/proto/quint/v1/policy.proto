@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package quint.v1;
+
+option go_package = "github.com/Quint-Security/quint/gen/quint/v1";
+
+import "quint/v1/common.proto";
+
+// ── Policy configuration ────────────────────────────────────────
+// Defines which tools are allowed/denied per server.
+// Supports glob patterns for server and tool names.
+
+message PolicyConfig {
+  int32              version        = 1;
+  string             data_dir       = 2;
+  LogLevel           log_level      = 3;
+  repeated ServerPolicy servers     = 4;
+}
+
+message ServerPolicy {
+  string             server         = 1;   // Server name or glob pattern
+  Action             default_action = 2;   // Action when no tool rule matches
+  repeated ToolRule  tools          = 3;
+}
+
+message ToolRule {
+  string  tool   = 1;   // Tool name or glob pattern
+  Action  action = 2;
+}
