@@ -33,7 +33,7 @@ export function startProxy(opts: ProxyOptions): void {
   const db = openAuditDb(dataDir);
 
   // Create audit logger
-  const logger = new AuditLogger(db, kp.privateKey, kp.publicKey);
+  const logger = new AuditLogger(db, kp.privateKey, kp.publicKey, opts.policy);
 
   // Create relay
   const relay = new Relay(opts.command, opts.args);

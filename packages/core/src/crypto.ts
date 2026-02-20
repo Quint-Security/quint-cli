@@ -1,4 +1,4 @@
-import { generateKeyPairSync, createPrivateKey, createPublicKey, sign, verify } from "node:crypto";
+import { generateKeyPairSync, createPrivateKey, createPublicKey, sign, verify, createHash } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync } from "node:fs";
 import { join, dirname } from "node:path";
 import type { KeyPair } from "./types.js";
@@ -68,6 +68,12 @@ export function verifySignature(data: string, signatureHex: string, publicKeyPem
 
 export function canonicalize(obj: Record<string, unknown>): string {
   return JSON.stringify(obj, Object.keys(obj).sort());
+}
+
+// ── Hashing ─────────────────────────────────────────────────────
+
+export function sha256(data: string): string {
+  return createHash("sha256").update(data, "utf-8").digest("hex");
 }
 
 // ── Public key fingerprint (first 16 hex chars of key hash) ─────

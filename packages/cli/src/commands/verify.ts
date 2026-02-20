@@ -5,15 +5,17 @@ import {
   openAuditDb,
   verifySignature,
   canonicalize,
+  sha256,
   type AuditEntry,
 } from "@quint/core";
 
 export const verifyCommand = new Command("verify")
-  .description("Verify Ed25519 signatures on audit log entries")
+  .description("Verify Ed25519 signatures and hash chain on audit log entries")
   .option("--id <n>", "Verify a specific entry by ID")
   .option("--last <n>", "Verify the last N entries", "20")
   .option("--all", "Verify all entries")
-  .action((opts: { id?: string; last?: string; all?: boolean }) => {
+  .option("--chain", "Also verify hash chain integrity (requires --all or --last)")
+  .action((opts: { id?: string; last?: string; all?: boolean; chain?: boolean }) => {
     const policy = loadPolicy();
     const dataDir = resolveDataDir(policy.data_dir);
     const db = openAuditDb(dataDir);
@@ -25,9 +27,11 @@ export const verifyCommand = new Command("verify")
         const entry = db.getById(parseInt(opts.id, 10));
         entries = entry ? [entry] : [];
       } else if (opts.all) {
-        entries = db.query({ limit: 100000 });
+        entries = db.getAll(); // ascending order for chain verification
       } else {
         entries = db.getLast(parseInt(opts.last!, 10));
+        // Reverse to ascending for chain verification
+        entries.reverse();
       }
 
       if (entries.length === 0) {
@@ -35,22 +39,53 @@ export const verifyCommand = new Command("verify")
         return;
       }
 
-      let valid = 0;
-      let invalid = 0;
+      // Signature verification
+      let sigValid = 0;
+      let sigInvalid = 0;
 
       for (const entry of entries) {
         const ok = verifyEntry(entry);
         if (ok) {
-          valid++;
+          sigValid++;
         } else {
-          invalid++;
+          sigInvalid++;
           console.log(`  ✗ INVALID signature on entry #${entry.id} (${entry.timestamp})`);
         }
       }
 
-      console.log(`\nVerified ${entries.length} entries: ${valid} valid, ${invalid} invalid`);
+      console.log(`\nSignatures: ${entries.length} checked, ${sigValid} valid, ${sigInvalid} invalid`);
 
-      if (invalid > 0) {
+      // Hash chain verification
+      if (opts.chain || opts.all) {
+        let chainValid = 0;
+        let chainBroken = 0;
+
+        for (let i = 1; i < entries.length; i++) {
+          const prev = entries[i - 1];
+          const curr = entries[i];
+
+          if (curr.prev_hash === "" && prev.prev_hash === "") {
+            // Legacy entries without hash chain — skip
+            continue;
+          }
+
+          const expectedHash = sha256(prev.signature);
+          if (curr.prev_hash === expectedHash) {
+            chainValid++;
+          } else {
+            chainBroken++;
+            console.log(`  ⛓ BROKEN chain at entry #${curr.id} — prev_hash doesn't match entry #${prev.id}`);
+          }
+        }
+
+        if (chainValid + chainBroken > 0) {
+          console.log(`Chain:      ${chainValid + chainBroken} links checked, ${chainValid} valid, ${chainBroken} broken`);
+        } else {
+          console.log(`Chain:      no chain data (legacy entries)`);
+        }
+      }
+
+      if (sigInvalid > 0) {
         process.exit(1);
       }
     } finally {
@@ -59,7 +94,6 @@ export const verifyCommand = new Command("verify")
   });
 
 function verifyEntry(entry: AuditEntry): boolean {
-  // Reconstruct the signable object
   const signable: Record<string, unknown> = {
     timestamp: entry.timestamp,
     server_name: entry.server_name,
@@ -70,6 +104,8 @@ function verifyEntry(entry: AuditEntry): boolean {
     arguments_json: entry.arguments_json,
     response_json: entry.response_json,
     verdict: entry.verdict,
+    policy_hash: entry.policy_hash ?? "",
+    prev_hash: entry.prev_hash ?? "",
     public_key: entry.public_key,
   };
 

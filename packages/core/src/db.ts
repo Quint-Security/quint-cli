@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
   arguments_json  TEXT,
   response_json   TEXT,
   verdict         TEXT NOT NULL,
+  policy_hash     TEXT NOT NULL DEFAULT '',
+  prev_hash       TEXT NOT NULL DEFAULT '',
   signature       TEXT NOT NULL,
   public_key      TEXT NOT NULL
 );
@@ -25,6 +27,12 @@ CREATE INDEX IF NOT EXISTS idx_tool_name   ON audit_log(tool_name);
 CREATE INDEX IF NOT EXISTS idx_verdict     ON audit_log(verdict);
 `;
 
+// Migration: add columns if they don't exist (for DBs created before this version)
+const MIGRATIONS = [
+  `ALTER TABLE audit_log ADD COLUMN policy_hash TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE audit_log ADD COLUMN prev_hash TEXT NOT NULL DEFAULT ''`,
+];
+
 export class AuditDb {
   private db: Database.Database;
 
@@ -33,16 +41,37 @@ export class AuditDb {
     this.db = new Database(dbPath);
     this.db.pragma("journal_mode = WAL");
     this.db.exec(SCHEMA);
+    this.migrate();
+  }
+
+  private migrate(): void {
+    for (const sql of MIGRATIONS) {
+      try {
+        this.db.exec(sql);
+      } catch {
+        // Column already exists — ignore
+      }
+    }
+  }
+
+  /** Get the signature of the last entry (for hash chaining) */
+  getLastSignature(): string | null {
+    const row = this.db.prepare(
+      "SELECT signature FROM audit_log ORDER BY id DESC LIMIT 1"
+    ).get() as { signature: string } | undefined;
+    return row?.signature ?? null;
   }
 
   insert(entry: Omit<AuditEntry, "id">): number {
     const stmt = this.db.prepare(`
       INSERT INTO audit_log
         (timestamp, server_name, direction, method, message_id, tool_name,
-         arguments_json, response_json, verdict, signature, public_key)
+         arguments_json, response_json, verdict, policy_hash, prev_hash,
+         signature, public_key)
       VALUES
         (@timestamp, @server_name, @direction, @method, @message_id, @tool_name,
-         @arguments_json, @response_json, @verdict, @signature, @public_key)
+         @arguments_json, @response_json, @verdict, @policy_hash, @prev_hash,
+         @signature, @public_key)
     `);
     const result = stmt.run(entry);
     return result.lastInsertRowid as number;
@@ -50,6 +79,18 @@ export class AuditDb {
 
   getById(id: number): AuditEntry | undefined {
     return this.db.prepare("SELECT * FROM audit_log WHERE id = ?").get(id) as AuditEntry | undefined;
+  }
+
+  /** Get entries in ID order (ascending) for chain verification */
+  getRange(startId: number, endId: number): AuditEntry[] {
+    return this.db.prepare(
+      "SELECT * FROM audit_log WHERE id >= ? AND id <= ? ORDER BY id ASC"
+    ).all(startId, endId) as AuditEntry[];
+  }
+
+  /** Get all entries in ID order (ascending) for chain verification */
+  getAll(): AuditEntry[] {
+    return this.db.prepare("SELECT * FROM audit_log ORDER BY id ASC").all() as AuditEntry[];
   }
 
   query(opts: {

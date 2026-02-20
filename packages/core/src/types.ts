@@ -65,6 +65,8 @@ export interface AuditEntry {
   arguments_json: string | null;
   response_json: string | null;
   verdict: Verdict;
+  policy_hash: string;
+  prev_hash: string;
   signature: string;
   public_key: string;
 }
