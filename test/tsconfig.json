@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../dist/test",
+    "composite": true
+  },
+  "include": ["."],
+  "references": [
+    { "path": "../packages/core" },
+    { "path": "../packages/proxy" }
+  ]
+}

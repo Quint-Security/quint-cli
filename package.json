@@ -1,0 +1,19 @@
+{
+  "name": "quint",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local security proxy for MCP tool calls",
+  "workspaces": [
+    "packages/core",
+    "packages/proxy",
+    "packages/cli"
+  ],
+  "scripts": {
+    "build": "npx tsc -b packages/core packages/proxy packages/cli test",
+    "test": "node --test dist/test/crypto.test.js dist/test/db.test.js dist/test/policy.test.js dist/test/interceptor.test.js dist/test/proxy.test.js",
+    "clean": "rm -rf packages/*/dist dist"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
