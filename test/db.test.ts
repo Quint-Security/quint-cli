@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { AuditDb, generateKeyPair, signData, canonicalize, sha256 } from "@quint/core";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -25,6 +26,7 @@ function makeEntry(overrides: Partial<Parameters<AuditDb["insert"]>[0]> = {}) {
     verdict: "allow" as const,
     policy_hash: "abc123",
     prev_hash: "",
+    nonce: crypto.randomUUID(),
     public_key: kp.publicKey,
   };
   const signable = { ...base };
@@ -100,6 +102,32 @@ describe("AuditDb", () => {
       assert.equal(all.length, 3);
       assert.equal(all[0].tool_name, "first");
       assert.equal(all[2].tool_name, "third");
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("insertAtomic reads last sig and inserts in one transaction", () => {
+    const { db, dir } = makeTmpDb();
+    try {
+      // Insert first entry normally
+      const e1 = makeEntry();
+      db.insert(e1);
+
+      // insertAtomic should see e1's signature as prevSignature
+      let seenPrevSig: string | null = "NOT_CALLED";
+      db.insertAtomic((prevSig) => {
+        seenPrevSig = prevSig;
+        return makeEntry({ prev_hash: prevSig ? sha256(prevSig) : "" });
+      });
+
+      assert.equal(seenPrevSig, e1.signature);
+      assert.equal(db.count(), 2);
+
+      // The second entry's prev_hash should chain to the first
+      const all = db.getAll();
+      assert.equal(all[1].prev_hash, sha256(all[0].signature));
     } finally {
       db.close();
       rmSync(dir, { recursive: true });

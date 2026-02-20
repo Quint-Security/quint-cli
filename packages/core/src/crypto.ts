@@ -65,6 +65,14 @@ export function verifySignature(data: string, signatureHex: string, publicKeyPem
 }
 
 // ── Canonical JSON for signing ──────────────────────────────────
+// NOTE: This is NOT RFC 8785 (JCS) compliant. It uses simple sorted-key
+// JSON.stringify which works correctly for ASCII strings, numbers, booleans,
+// and null values. It may produce non-deterministic output for:
+//   - Unicode strings with special escape sequences
+//   - Numbers requiring special IEEE 754 formatting
+// This is sufficient for the current use case where all values are ASCII
+// strings/numbers. If interoperability with external verifiers is needed,
+// replace with a proper RFC 8785 implementation.
 
 export function canonicalize(obj: Record<string, unknown>): string {
   return JSON.stringify(obj, Object.keys(obj).sort());

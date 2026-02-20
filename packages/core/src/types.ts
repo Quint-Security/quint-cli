@@ -67,6 +67,7 @@ export interface AuditEntry {
   verdict: Verdict;
   policy_hash: string;
   prev_hash: string;
+  nonce: string;
   signature: string;
   public_key: string;
 }

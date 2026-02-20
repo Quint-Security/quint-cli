@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
   verdict         TEXT NOT NULL,
   policy_hash     TEXT NOT NULL DEFAULT '',
   prev_hash       TEXT NOT NULL DEFAULT '',
+  nonce           TEXT NOT NULL DEFAULT '',
   signature       TEXT NOT NULL,
   public_key      TEXT NOT NULL
 );
@@ -31,6 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_verdict     ON audit_log(verdict);
 const MIGRATIONS = [
   `ALTER TABLE audit_log ADD COLUMN policy_hash TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE audit_log ADD COLUMN prev_hash TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE audit_log ADD COLUMN nonce TEXT NOT NULL DEFAULT ''`,
 ];
 
 export class AuditDb {
@@ -62,16 +64,45 @@ export class AuditDb {
     return row?.signature ?? null;
   }
 
+  /**
+   * Atomically read the last signature and insert a new entry.
+   * This prevents chain breaks when multiple proxy instances share a DB.
+   */
+  insertAtomic(buildEntry: (prevSignature: string | null) => Omit<AuditEntry, "id">): number {
+    const insertStmt = this.db.prepare(`
+      INSERT INTO audit_log
+        (timestamp, server_name, direction, method, message_id, tool_name,
+         arguments_json, response_json, verdict, policy_hash, prev_hash,
+         nonce, signature, public_key)
+      VALUES
+        (@timestamp, @server_name, @direction, @method, @message_id, @tool_name,
+         @arguments_json, @response_json, @verdict, @policy_hash, @prev_hash,
+         @nonce, @signature, @public_key)
+    `);
+    const lastSigStmt = this.db.prepare(
+      "SELECT signature FROM audit_log ORDER BY id DESC LIMIT 1"
+    );
+
+    let rowId = 0;
+    this.db.transaction(() => {
+      const lastRow = lastSigStmt.get() as { signature: string } | undefined;
+      const entry = buildEntry(lastRow?.signature ?? null);
+      const result = insertStmt.run(entry);
+      rowId = result.lastInsertRowid as number;
+    })();
+    return rowId;
+  }
+
   insert(entry: Omit<AuditEntry, "id">): number {
     const stmt = this.db.prepare(`
       INSERT INTO audit_log
         (timestamp, server_name, direction, method, message_id, tool_name,
          arguments_json, response_json, verdict, policy_hash, prev_hash,
-         signature, public_key)
+         nonce, signature, public_key)
       VALUES
         (@timestamp, @server_name, @direction, @method, @message_id, @tool_name,
          @arguments_json, @response_json, @verdict, @policy_hash, @prev_hash,
-         @signature, @public_key)
+         @nonce, @signature, @public_key)
     `);
     const result = stmt.run(entry);
     return result.lastInsertRowid as number;

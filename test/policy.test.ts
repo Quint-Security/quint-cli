@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { evaluatePolicy, validatePolicy, type PolicyConfig } from "@quint/core";
+import { evaluatePolicy, validatePolicy, globMatch, type PolicyConfig } from "@quint/core";
 
 const testPolicy: PolicyConfig = {
   version: 1,
@@ -63,6 +63,86 @@ describe("evaluatePolicy", () => {
     };
     const result = evaluatePolicy(noWildcard, "other-server", "SomeTool");
     assert.equal(result, "deny"); // fail-closed
+  });
+});
+
+describe("globMatch", () => {
+  it("matches exact strings", () => {
+    assert.ok(globMatch("ReadFile", "ReadFile"));
+    assert.ok(!globMatch("ReadFile", "WriteFile"));
+  });
+
+  it("matches * wildcard", () => {
+    assert.ok(globMatch("write_*", "write_file"));
+    assert.ok(globMatch("write_*", "write_data"));
+    assert.ok(!globMatch("write_*", "read_file"));
+  });
+
+  it("matches Mechanic* pattern", () => {
+    assert.ok(globMatch("Mechanic*", "MechanicRunTool"));
+    assert.ok(globMatch("Mechanic*", "MechanicDescribeTool"));
+    assert.ok(!globMatch("Mechanic*", "ReadFile"));
+  });
+
+  it("matches ? single char wildcard", () => {
+    assert.ok(globMatch("tool_?", "tool_a"));
+    assert.ok(globMatch("tool_?", "tool_1"));
+    assert.ok(!globMatch("tool_?", "tool_ab"));
+  });
+
+  it("matches * as catch-all", () => {
+    assert.ok(globMatch("*", "anything"));
+    assert.ok(globMatch("*", ""));
+  });
+});
+
+describe("evaluatePolicy with globs", () => {
+  it("denies tools matching a glob pattern", () => {
+    const policy: PolicyConfig = {
+      version: 1,
+      data_dir: "/tmp",
+      log_level: "info",
+      servers: [{
+        server: "builder-mcp",
+        default_action: "allow",
+        tools: [{ tool: "Mechanic*", action: "deny" }],
+      }],
+    };
+    assert.equal(evaluatePolicy(policy, "builder-mcp", "MechanicRunTool"), "deny");
+    assert.equal(evaluatePolicy(policy, "builder-mcp", "MechanicDescribeTool"), "deny");
+    assert.equal(evaluatePolicy(policy, "builder-mcp", "ReadFile"), "allow");
+  });
+
+  it("allows tools matching a glob pattern on deny-default server", () => {
+    const policy: PolicyConfig = {
+      version: 1,
+      data_dir: "/tmp",
+      log_level: "info",
+      servers: [{
+        server: "strict-server",
+        default_action: "deny",
+        tools: [{ tool: "read_*", action: "allow" }],
+      }],
+    };
+    assert.equal(evaluatePolicy(policy, "strict-server", "read_file"), "allow");
+    assert.equal(evaluatePolicy(policy, "strict-server", "read_data"), "allow");
+    assert.equal(evaluatePolicy(policy, "strict-server", "write_file"), "deny");
+  });
+
+  it("matches server names with globs", () => {
+    const policy: PolicyConfig = {
+      version: 1,
+      data_dir: "/tmp",
+      log_level: "info",
+      servers: [{
+        server: "builder-*",
+        default_action: "allow",
+        tools: [{ tool: "DangerousTool", action: "deny" }],
+      }],
+    };
+    assert.equal(evaluatePolicy(policy, "builder-mcp", "DangerousTool"), "deny");
+    assert.equal(evaluatePolicy(policy, "builder-v2", "DangerousTool"), "deny");
+    assert.equal(evaluatePolicy(policy, "other-mcp", "DangerousTool"), "deny"); // no match = fail-closed
   });
 });
 

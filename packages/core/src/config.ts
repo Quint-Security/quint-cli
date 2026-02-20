@@ -111,6 +111,24 @@ export function validatePolicy(config: PolicyConfig): string[] {
   return errors;
 }
 
+// ── Glob matching ───────────────────────────────────────────────
+
+/**
+ * Match a string against a pattern with glob wildcards.
+ * Supports: * (any chars), ? (single char).
+ * Examples: "write_*" matches "write_file", "Mechanic*" matches "MechanicRunTool"
+ */
+export function globMatch(pattern: string, value: string): boolean {
+  if (pattern === value || pattern === "*") return true;
+
+  // Convert glob to regex: escape special chars, then replace * and ?
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, ".*")
+    .replace(/\?/g, ".");
+  return new RegExp(`^${escaped}$`).test(value);
+}
+
 // ── Evaluate policy for a tool call ─────────────────────────────
 
 export function evaluatePolicy(
@@ -121,7 +139,7 @@ export function evaluatePolicy(
   // Find matching server policy (first match wins, * is wildcard)
   let serverPolicy: ServerPolicy | undefined;
   for (const sp of config.servers) {
-    if (sp.server === serverName || sp.server === "*") {
+    if (globMatch(sp.server, serverName)) {
       serverPolicy = sp;
       break;
     }
@@ -133,9 +151,9 @@ export function evaluatePolicy(
   // If no tool name (not a tools/call), passthrough
   if (!toolName) return "passthrough";
 
-  // Check tool-specific rules (first match wins)
+  // Check tool-specific rules (first match wins, supports glob patterns)
   for (const rule of serverPolicy.tools) {
-    if (rule.tool === toolName || rule.tool === "*") {
+    if (globMatch(rule.tool, toolName)) {
       return rule.action;
     }
   }

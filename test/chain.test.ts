@@ -148,6 +148,7 @@ describe("hash chain", () => {
           verdict: entry.verdict,
           policy_hash: entry.policy_hash,
           prev_hash: entry.prev_hash,
+          nonce: entry.nonce ?? "",
           public_key: entry.public_key,
         };
         const canonical = canonicalize(signable);
