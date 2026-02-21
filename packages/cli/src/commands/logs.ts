@@ -54,5 +54,6 @@ function printEntry(e: AuditEntry): void {
   const icon = e.verdict === "deny" ? "✗" : e.verdict === "allow" ? "✓" : "→";
   const ts = e.timestamp.replace("T", " ").replace(/\.\d+Z$/, "Z");
   const tool = e.tool_name ? ` tool=${e.tool_name}` : "";
-  console.log(`  ${icon} [${ts}] ${e.direction} ${e.method}${tool} server=${e.server_name} verdict=${e.verdict} id=${e.id}`);
+  const risk = e.risk_score != null ? ` risk=${e.risk_score}(${e.risk_level})` : "";
+  console.log(`  ${icon} [${ts}] ${e.direction} ${e.method}${tool} server=${e.server_name} verdict=${e.verdict}${risk} id=${e.id}`);
 }

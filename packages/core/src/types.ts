@@ -65,6 +65,8 @@ export interface AuditEntry {
   arguments_json: string | null;
   response_json: string | null;
   verdict: Verdict;
+  risk_score: number | null;
+  risk_level: string | null;
   policy_hash: string;
   prev_hash: string;
   nonce: string;

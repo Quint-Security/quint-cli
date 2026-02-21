@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
   arguments_json  TEXT,
   response_json   TEXT,
   verdict         TEXT NOT NULL,
+  risk_score      INTEGER,
+  risk_level      TEXT,
   policy_hash     TEXT NOT NULL DEFAULT '',
   prev_hash       TEXT NOT NULL DEFAULT '',
   nonce           TEXT NOT NULL DEFAULT '',
@@ -33,6 +35,8 @@ const MIGRATIONS = [
   `ALTER TABLE audit_log ADD COLUMN policy_hash TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE audit_log ADD COLUMN prev_hash TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE audit_log ADD COLUMN nonce TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE audit_log ADD COLUMN risk_score INTEGER`,
+  `ALTER TABLE audit_log ADD COLUMN risk_level TEXT`,
 ];
 
 export class AuditDb {
@@ -72,12 +76,12 @@ export class AuditDb {
     const insertStmt = this.db.prepare(`
       INSERT INTO audit_log
         (timestamp, server_name, direction, method, message_id, tool_name,
-         arguments_json, response_json, verdict, policy_hash, prev_hash,
-         nonce, signature, public_key)
+         arguments_json, response_json, verdict, risk_score, risk_level,
+         policy_hash, prev_hash, nonce, signature, public_key)
       VALUES
         (@timestamp, @server_name, @direction, @method, @message_id, @tool_name,
-         @arguments_json, @response_json, @verdict, @policy_hash, @prev_hash,
-         @nonce, @signature, @public_key)
+         @arguments_json, @response_json, @verdict, @risk_score, @risk_level,
+         @policy_hash, @prev_hash, @nonce, @signature, @public_key)
     `);
     const lastSigStmt = this.db.prepare(
       "SELECT signature FROM audit_log ORDER BY id DESC LIMIT 1"
@@ -97,12 +101,12 @@ export class AuditDb {
     const stmt = this.db.prepare(`
       INSERT INTO audit_log
         (timestamp, server_name, direction, method, message_id, tool_name,
-         arguments_json, response_json, verdict, policy_hash, prev_hash,
-         nonce, signature, public_key)
+         arguments_json, response_json, verdict, risk_score, risk_level,
+         policy_hash, prev_hash, nonce, signature, public_key)
       VALUES
         (@timestamp, @server_name, @direction, @method, @message_id, @tool_name,
-         @arguments_json, @response_json, @verdict, @policy_hash, @prev_hash,
-         @nonce, @signature, @public_key)
+         @arguments_json, @response_json, @verdict, @risk_score, @risk_level,
+         @policy_hash, @prev_hash, @nonce, @signature, @public_key)
     `);
     const result = stmt.run(entry);
     return result.lastInsertRowid as number;

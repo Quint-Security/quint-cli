@@ -146,6 +146,8 @@ describe("hash chain", () => {
           arguments_json: entry.arguments_json,
           response_json: entry.response_json,
           verdict: entry.verdict,
+          risk_score: entry.risk_score ?? null,
+          risk_level: entry.risk_level ?? null,
           policy_hash: entry.policy_hash,
           prev_hash: entry.prev_hash,
           nonce: entry.nonce ?? "",

@@ -31,6 +31,8 @@ export class AuditLogger {
     argumentsJson: string | null;
     responseJson: string | null;
     verdict: Verdict;
+    riskScore?: number | null;
+    riskLevel?: string | null;
   }): number {
     // Use insertAtomic to read last signature and insert in one transaction,
     // preventing chain breaks when multiple proxy instances share the same DB.
@@ -49,6 +51,8 @@ export class AuditLogger {
         arguments_json: opts.argumentsJson,
         response_json: opts.responseJson,
         verdict: opts.verdict,
+        risk_score: opts.riskScore ?? null,
+        risk_level: opts.riskLevel ?? null,
         policy_hash: this.policyHash,
         prev_hash: prevHash,
         nonce,
@@ -68,6 +72,8 @@ export class AuditLogger {
         arguments_json: opts.argumentsJson,
         response_json: opts.responseJson,
         verdict: opts.verdict,
+        risk_score: opts.riskScore ?? null,
+        risk_level: opts.riskLevel ?? null,
         policy_hash: this.policyHash,
         prev_hash: prevHash,
         nonce,

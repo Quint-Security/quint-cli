@@ -24,6 +24,8 @@ function makeEntry(overrides: Partial<Parameters<AuditDb["insert"]>[0]> = {}) {
     arguments_json: '{"path":"/tmp/x"}',
     response_json: null,
     verdict: "allow" as const,
+    risk_score: null as number | null,
+    risk_level: null as string | null,
     policy_hash: "abc123",
     prev_hash: "",
     nonce: crypto.randomUUID(),
