@@ -13,6 +13,7 @@ export interface HttpRelayEvents {
 interface PendingRequest {
   res: ServerResponse;
   body: string;
+  headers: Record<string, string>;
 }
 
 /**
@@ -87,12 +88,18 @@ export class HttpRelay extends EventEmitter {
     this.pending.delete(requestKey);
 
     try {
+      // Forward relevant headers from the original request to the remote server
+      const forwardHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+      };
+      if (pending.headers.authorization) {
+        forwardHeaders["Authorization"] = pending.headers.authorization;
+      }
+
       const remoteRes = await fetch(this.targetUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream",
-        },
+        headers: forwardHeaders,
         body: pending.body,
       });
 
@@ -199,7 +206,14 @@ export class HttpRelay extends EventEmitter {
       const body = Buffer.concat(chunks).toString("utf-8");
       const requestKey = String(++this.requestCounter);
 
-      this.pending.set(requestKey, { res, body });
+      // Capture headers to forward to remote server
+      const headers: Record<string, string> = {};
+      for (const key of ["authorization", "content-type", "accept"]) {
+        const val = req.headers[key];
+        if (typeof val === "string") headers[key] = val;
+      }
+
+      this.pending.set(requestKey, { res, body, headers });
 
       // Emit the request for the interceptor to inspect.
       // The interceptor will call respondToClient() for denials
