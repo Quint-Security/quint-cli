@@ -4,7 +4,7 @@ import {
   resolveDataDir,
   openAuthDb,
   generateApiKey,
-} from "@quint/core";
+} from "@quint-security/core";
 
 export const authCommand = new Command("auth")
   .description("Manage authentication (API keys and sessions)");

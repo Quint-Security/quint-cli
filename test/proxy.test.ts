@@ -186,7 +186,7 @@ describe("proxy integration", () => {
 
       // Verify the audit database was created and has entries
       // We import dynamically to avoid test file requiring native deps at parse time
-      const { AuditDb } = await import("@quint/core");
+      const { AuditDb } = await import("@quint-security/core");
       const db = new AuditDb(join(dir, "quint.db"));
       const count = db.count();
       // Should have: allow request + allow response + deny request + deny response = 4+

@@ -11,7 +11,7 @@ import {
   logWarn,
   logError,
   RiskEngine,
-} from "@quint/core";
+} from "@quint-security/core";
 import { HttpRelay } from "./http-relay.js";
 import { inspectRequest, inspectResponse, buildDenyResponse } from "./interceptor.js";
 import { AuditLogger } from "./logger.js";

@@ -7,7 +7,7 @@ import {
   isToolCallRequest,
   extractToolInfo,
   evaluatePolicy,
-} from "@quint/core";
+} from "@quint-security/core";
 
 export interface InspectionResult {
   /** The parsed JSON-RPC message (null if line is not valid JSON-RPC) */

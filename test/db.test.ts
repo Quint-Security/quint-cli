@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
-import { AuditDb, generateKeyPair, signData, canonicalize, sha256 } from "@quint/core";
+import { AuditDb, generateKeyPair, signData, canonicalize, sha256 } from "@quint-security/core";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";

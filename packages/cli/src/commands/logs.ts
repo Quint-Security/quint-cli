@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { loadPolicy, resolveDataDir, openAuditDb, type AuditEntry } from "@quint/core";
+import { loadPolicy, resolveDataDir, openAuditDb, type AuditEntry } from "@quint-security/core";
 
 export const logsCommand = new Command("logs")
   .description("Search and display the audit log")

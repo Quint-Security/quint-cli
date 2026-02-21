@@ -4,7 +4,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { join } from "node:path";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { openAuthDb, generateApiKey } from "@quint/core";
+import { openAuthDb, generateApiKey } from "@quint-security/core";
 
 const PROJECT_ROOT = join(__dirname, "..", "..");
 const MOCK_HTTP_SERVER = join(__dirname, "fixtures", "mock-http-mcp-server.js");

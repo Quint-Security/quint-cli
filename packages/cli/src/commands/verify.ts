@@ -7,7 +7,7 @@ import {
   canonicalize,
   sha256,
   type AuditEntry,
-} from "@quint/core";
+} from "@quint-security/core";
 
 export const verifyCommand = new Command("verify")
   .description("Verify Ed25519 signatures and hash chain on audit log entries")

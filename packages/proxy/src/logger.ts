@@ -6,7 +6,7 @@ import {
   signData,
   canonicalize,
   sha256,
-} from "@quint/core";
+} from "@quint-security/core";
 import { randomUUID } from "node:crypto";
 
 export class AuditLogger {

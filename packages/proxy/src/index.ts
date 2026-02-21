@@ -7,7 +7,7 @@ import {
   logDebug,
   logInfo,
   logError,
-} from "@quint/core";
+} from "@quint-security/core";
 import { Relay } from "./relay.js";
 import { inspectRequest, inspectResponse, buildDenyResponse } from "./interceptor.js";
 import { AuditLogger } from "./logger.js";

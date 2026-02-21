@@ -1,6 +1,6 @@
 import { Command } from "commander";
-import { loadPolicy } from "@quint/core";
-import { startHttpProxy } from "@quint/proxy";
+import { loadPolicy } from "@quint-security/core";
+import { startHttpProxy } from "@quint-security/proxy";
 
 export const httpProxyCommand = new Command("http-proxy")
   .description("Run as HTTP proxy in front of a remote MCP server")

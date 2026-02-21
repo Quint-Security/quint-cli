@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { loadPolicy, resolveDataDir, initPolicy, validatePolicy } from "@quint/core";
+import { loadPolicy, resolveDataDir, initPolicy, validatePolicy } from "@quint-security/core";
 
 export const policyCommand = new Command("policy")
   .description("Manage access control policy");

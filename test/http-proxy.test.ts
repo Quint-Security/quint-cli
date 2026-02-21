@@ -200,7 +200,7 @@ describe("http-proxy integration", () => {
     // Give logger time to write
     await new Promise((r) => setTimeout(r, 200));
 
-    const { AuditDb } = await import("@quint/core");
+    const { AuditDb } = await import("@quint-security/core");
     const db = new AuditDb(join(dir, "quint.db"));
     const count = db.count();
     // Should have: request + response = 2+
@@ -230,7 +230,7 @@ describe("http-proxy integration", () => {
 
     await new Promise((r) => setTimeout(r, 200));
 
-    const { AuditDb, verifySignature, canonicalize } = await import("@quint/core");
+    const { AuditDb, verifySignature, canonicalize } = await import("@quint-security/core");
     const db = new AuditDb(join(dir, "quint.db"));
     const entries = db.getAll();
     assert.ok(entries.length >= 2, `Expected >= 2 entries, got ${entries.length}`);

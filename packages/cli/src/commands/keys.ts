@@ -6,7 +6,7 @@ import {
   saveKeyPair,
   loadKeyPair,
   publicKeyFingerprint,
-} from "@quint/core";
+} from "@quint-security/core";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 

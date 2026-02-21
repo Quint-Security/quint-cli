@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { evaluatePolicy, validatePolicy, globMatch, type PolicyConfig } from "@quint/core";
+import { evaluatePolicy, validatePolicy, globMatch, type PolicyConfig } from "@quint-security/core";
 
 const testPolicy: PolicyConfig = {
   version: 1,

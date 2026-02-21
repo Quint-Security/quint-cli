@@ -1,14 +1,21 @@
 {
-  "name": "@quint/proxy",
+  "name": "@quint-security/proxy",
   "version": "0.1.0",
-  "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Quint-Security/cli.git",
+    "directory": "packages/proxy"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "scripts": {
     "build": "tsc"
   },
   "dependencies": {
-    "@quint/core": "*"
+    "@quint-security/core": "*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

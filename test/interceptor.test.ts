@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { inspectRequest, inspectResponse, buildDenyResponse } from "@quint/proxy";
-import type { PolicyConfig } from "@quint/core";
+import { inspectRequest, inspectResponse, buildDenyResponse } from "@quint-security/proxy";
+import type { PolicyConfig } from "@quint-security/core";
 
 const policy: PolicyConfig = {
   version: 1,

@@ -11,7 +11,7 @@ import {
   createSession,
   validateSession,
   authenticateBearer,
-} from "@quint/core";
+} from "@quint-security/core";
 
 describe("AuthDb + API keys", () => {
   let tempDir: string;

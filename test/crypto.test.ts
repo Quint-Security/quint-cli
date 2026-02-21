@@ -8,7 +8,7 @@ import {
   saveKeyPair,
   loadKeyPair,
   ensureKeyPair,
-} from "@quint/core";
+} from "@quint-security/core";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";

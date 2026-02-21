@@ -1,16 +1,23 @@
 {
-  "name": "@quint/cli",
+  "name": "@quint-security/cli",
   "version": "0.1.0",
-  "private": true,
   "bin": {
     "quint": "dist/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Quint-Security/cli.git",
+    "directory": "packages/cli"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "scripts": {
     "build": "tsc"
   },
   "dependencies": {
-    "@quint/core": "*",
-    "@quint/proxy": "*",
+    "@quint-security/core": "*",
+    "@quint-security/proxy": "*",
     "commander": "^12.0.0"
   },
   "devDependencies": {

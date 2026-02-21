@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { RiskEngine } from "@quint/core";
+import { RiskEngine } from "@quint-security/core";
 
 describe("RiskEngine", () => {
   it("scores read operations as low risk", () => {

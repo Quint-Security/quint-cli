@@ -1,6 +1,6 @@
 import { Command } from "commander";
-import { loadPolicy, resolveDataDir } from "@quint/core";
-import { startProxy } from "@quint/proxy";
+import { loadPolicy, resolveDataDir } from "@quint-security/core";
+import { startProxy } from "@quint-security/proxy";
 
 export const proxyCommand = new Command("proxy")
   .description("Run as MCP stdio proxy wrapping another MCP server")
