@@ -1,0 +1,54 @@
+name: Claude PR Description
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  write-description:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout engineering skills
+        uses: actions/checkout@v4
+        with:
+          repository: Quint-Security/skills
+          token: ${{ secrets.ORG_GITHUB_TOKEN }}
+          path: .skills
+
+      - name: Load documentation skill
+        id: skills
+        run: |
+          {
+            echo 'content<<SKILL_EOF'
+            cat .skills/documentation/SKILL.md
+            echo 'SKILL_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Write PR description
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          system_prompt: ${{ steps.skills.outputs.content }}
+          prompt: |
+            Review this pull request and write a clear, structured description for it.
+
+            Use `gh pr view ${{ github.event.pull_request.number }} --json title,body,files,commits` to inspect the PR,
+            then update its description with `gh pr edit ${{ github.event.pull_request.number }} --body "..."`.
+
+            The description must include:
+            - What changed and why
+            - How to verify the change works
+            - Any breaking changes or migration steps
+
+            Follow the documentation skill standards: active voice, present tense, one idea per sentence.
+            Do not add filler or restate the title. Be specific and concise.
+          allowed_tools: "Bash(gh pr view:*),Bash(gh pr edit:*),Bash(git log:*),Bash(git diff:*)"
