@@ -2,6 +2,8 @@ import {
   type PolicyConfig,
   ensureKeyPair,
   openAuditDb,
+  openAuthDb,
+  authenticateBearer,
   resolveDataDir,
 } from "@quint/core";
 import { HttpRelay } from "./http-relay.js";
@@ -13,6 +15,7 @@ export interface HttpProxyOptions {
   port: number;
   targetUrl: string;
   policy: PolicyConfig;
+  requireAuth?: boolean;
 }
 
 /**
@@ -31,8 +34,20 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
   // Create audit logger
   const logger = new AuditLogger(db, kp.privateKey, kp.publicKey, opts.policy);
 
-  // Create HTTP relay
-  const relay = new HttpRelay(opts.port, opts.targetUrl);
+  // Create HTTP relay (with optional auth)
+  const authDb = opts.requireAuth ? openAuthDb(dataDir) : null;
+  const relay = new HttpRelay(opts.port, opts.targetUrl, opts.requireAuth ? (req) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return "Quint: missing or invalid Authorization header. Use: Bearer <api-key>";
+    }
+    const token = authHeader.slice(7);
+    const result = authenticateBearer(authDb!, token);
+    if (!result) {
+      return "Quint: invalid or expired API key";
+    }
+    return null;
+  } : undefined);
 
   // ── Handle requests from agent → remote MCP server ──
 
@@ -102,6 +117,7 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
   const shutdown = () => {
     relay.stop();
     db.close();
+    authDb?.close();
     process.exit(0);
   };
 

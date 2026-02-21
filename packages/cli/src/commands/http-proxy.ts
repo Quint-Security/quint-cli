@@ -8,7 +8,8 @@ export const httpProxyCommand = new Command("http-proxy")
   .requiredOption("--port <port>", "Local port to listen on", parseInt)
   .requiredOption("--target <url>", "Remote MCP server URL to proxy to")
   .option("--policy <path>", "Path to policy.json (default: ~/.quint/policy.json)")
-  .action(async (opts: { name: string; port: number; target: string; policy?: string }) => {
+  .option("--require-auth", "Require API key authentication on all requests")
+  .action(async (opts: { name: string; port: number; target: string; policy?: string; requireAuth?: boolean }) => {
     if (isNaN(opts.port) || opts.port < 1 || opts.port > 65535) {
       process.stderr.write("quint: --port must be a valid port number (1-65535)\n");
       process.exit(1);
@@ -28,5 +29,6 @@ export const httpProxyCommand = new Command("http-proxy")
       port: opts.port,
       targetUrl: opts.target,
       policy,
+      requireAuth: opts.requireAuth,
     });
   });

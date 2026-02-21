@@ -8,6 +8,7 @@ import { keysCommand } from "./commands/keys.js";
 import { verifyCommand } from "./commands/verify.js";
 import { policyCommand } from "./commands/policy.js";
 import { statusCommand } from "./commands/status.js";
+import { authCommand } from "./commands/auth.js";
 
 const program = new Command()
   .name("quint")
@@ -21,5 +22,6 @@ program.addCommand(keysCommand);
 program.addCommand(verifyCommand);
 program.addCommand(policyCommand);
 program.addCommand(statusCommand);
+program.addCommand(authCommand);
 
 program.parse();

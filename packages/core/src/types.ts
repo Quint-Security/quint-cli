@@ -72,6 +72,29 @@ export interface AuditEntry {
   public_key: string;
 }
 
+// ── Auth types ──────────────────────────────────────────────────
+
+export interface ApiKey {
+  id: string;           // Public identifier (prefix: qk_)
+  key_hash: string;     // SHA-256 hex of the raw key
+  owner_id: string;     // Who created it
+  label: string;        // Human-readable name
+  scopes: string;       // Comma-separated scopes (e.g. "proxy:read,audit:write")
+  created_at: string;   // ISO-8601
+  expires_at: string | null;  // ISO-8601 or null for no expiry
+  revoked: boolean;
+}
+
+export interface Session {
+  id: string;           // Opaque session token (UUID v4)
+  subject_id: string;   // API key ID or user ID
+  auth_method: string;  // "api_key" | "passkey"
+  scopes: string;       // Inherited from credential
+  issued_at: string;    // ISO-8601
+  expires_at: string;   // ISO-8601 (default: issued_at + 24h)
+  revoked: boolean;
+}
+
 // ── Crypto types ────────────────────────────────────────────────
 
 export interface KeyPair {

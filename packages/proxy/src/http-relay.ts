@@ -16,6 +16,12 @@ interface PendingRequest {
 }
 
 /**
+ * Optional auth check function. Return null/undefined if auth passes,
+ * or an error message string to reject the request with 401.
+ */
+export type AuthCheckFn = (req: IncomingMessage) => string | undefined | null;
+
+/**
  * HttpRelay manages:
  *  - Running a local HTTP server that accepts JSON-RPC POST requests
  *  - Forwarding allowed requests to a remote MCP server via fetch()
@@ -30,11 +36,13 @@ export class HttpRelay extends EventEmitter {
   private targetUrl: string;
   private pending: Map<string, PendingRequest> = new Map();
   private requestCounter = 0;
+  private authCheck: AuthCheckFn | null = null;
 
-  constructor(port: number, targetUrl: string) {
+  constructor(port: number, targetUrl: string, authCheck?: AuthCheckFn) {
     super();
     this.port = port;
     this.targetUrl = targetUrl;
+    this.authCheck = authCheck ?? null;
   }
 
   start(): Promise<void> {
@@ -170,6 +178,20 @@ export class HttpRelay extends EventEmitter {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+    // Auth check (if configured)
+    if (this.authCheck) {
+      const authError = this.authCheck(req);
+      if (authError) {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          jsonrpc: "2.0",
+          id: null,
+          error: { code: -32600, message: authError },
+        }));
+        return;
+      }
+    }
 
     const chunks: Buffer[] = [];
     req.on("data", (chunk: Buffer) => chunks.push(chunk));
