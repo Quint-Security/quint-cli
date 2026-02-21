@@ -5,6 +5,12 @@ import {
   openAuthDb,
   authenticateBearer,
   resolveDataDir,
+  setLogLevel,
+  logDebug,
+  logInfo,
+  logWarn,
+  logError,
+  RiskEngine,
 } from "@quint/core";
 import { HttpRelay } from "./http-relay.js";
 import { inspectRequest, inspectResponse, buildDenyResponse } from "./interceptor.js";
@@ -23,6 +29,7 @@ export interface HttpProxyOptions {
  * requests, enforce policy, sign and log everything, forward to remote.
  */
 export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
+  setLogLevel(opts.policy.log_level);
   const dataDir = resolveDataDir(opts.policy.data_dir);
 
   // Ensure signing keys exist
@@ -33,6 +40,9 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
 
   // Create audit logger
   const logger = new AuditLogger(db, kp.privateKey, kp.publicKey, opts.policy);
+
+  // Create risk engine
+  const riskEngine = new RiskEngine();
 
   // Create HTTP relay (with optional auth)
   const authDb = opts.requireAuth ? openAuthDb(dataDir) : null;
@@ -71,6 +81,7 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
       const reqId = result.message && "id" in result.message ? result.message.id : null;
       const errorResponse = buildDenyResponse(reqId ?? null);
       relay.respondToClient(requestKey, errorResponse);
+      logInfo(`denied ${result.toolName} on ${opts.serverName}`);
 
       // Log the synthetic deny response
       logger.log({
@@ -83,8 +94,43 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
         responseJson: errorResponse,
         verdict: "deny",
       });
+    } else if (result.toolName) {
+      // Run risk scoring on tool calls that passed policy
+      const risk = riskEngine.score(result.toolName, result.argumentsJson, "anonymous");
+      const riskAction = riskEngine.evaluate(risk);
+
+      if (riskAction === "deny") {
+        // Risk score too high — auto-deny
+        const reqId = result.message && "id" in result.message ? result.message.id : null;
+        const errorResponse = buildDenyResponse(reqId ?? null);
+        relay.respondToClient(requestKey, errorResponse);
+        logWarn(`risk-denied ${result.toolName} (score=${risk.score}, level=${risk.level}): ${risk.reasons.join("; ")}`);
+
+        logger.log({
+          serverName: opts.serverName,
+          direction: "response",
+          method: result.method,
+          messageId: result.messageId,
+          toolName: result.toolName,
+          argumentsJson: null,
+          responseJson: errorResponse,
+          verdict: "deny",
+        });
+      } else {
+        if (riskAction === "flag") {
+          logWarn(`high-risk ${result.toolName} (score=${risk.score}, level=${risk.level}): ${risk.reasons.join("; ")}`);
+        }
+        logDebug(`forwarding ${result.method} (risk=${risk.score}) to remote`);
+        relay.forwardToRemote(requestKey);
+      }
+
+      // Check for revocation threshold
+      if (riskEngine.shouldRevoke("anonymous")) {
+        logWarn(`repeated high-risk actions detected — consider revoking agent credentials`);
+      }
     } else {
-      // Forward to remote server
+      // Non-tool-call (initialize, tools/list, etc.) — forward directly
+      logDebug(`forwarding ${result.method} (${result.verdict}) to remote`);
       relay.forwardToRemote(requestKey);
     }
   });
@@ -110,7 +156,7 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
   // ── Handle errors ──
 
   relay.on("error", (err: Error) => {
-    process.stderr.write(`quint: http-proxy error: ${err.message}\n`);
+    logError(`http-proxy error: ${err.message}`);
   });
 
   // Handle shutdown
@@ -126,7 +172,5 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
 
   // Start listening
   await relay.start();
-  process.stderr.write(
-    `quint: HTTP proxy listening on http://localhost:${opts.port} → ${opts.targetUrl}\n`,
-  );
+  logInfo(`HTTP proxy listening on http://localhost:${opts.port} → ${opts.targetUrl}`);
 }

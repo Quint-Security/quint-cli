@@ -3,6 +3,10 @@ import {
   ensureKeyPair,
   openAuditDb,
   resolveDataDir,
+  setLogLevel,
+  logDebug,
+  logInfo,
+  logError,
 } from "@quint/core";
 import { Relay } from "./relay.js";
 import { inspectRequest, inspectResponse, buildDenyResponse } from "./interceptor.js";
@@ -26,6 +30,7 @@ export interface ProxyOptions {
  * messages, enforce policy, sign and log everything.
  */
 export function startProxy(opts: ProxyOptions): void {
+  setLogLevel(opts.policy.log_level);
   const dataDir = resolveDataDir(opts.policy.data_dir);
 
   // Ensure signing keys exist
@@ -62,6 +67,7 @@ export function startProxy(opts: ProxyOptions): void {
       const reqId = result.message && "id" in result.message ? result.message.id : null;
       const errorResponse = buildDenyResponse(reqId ?? null);
       relay.sendToParent(errorResponse);
+      logInfo(`denied ${result.toolName} on ${opts.serverName}`);
 
       // Log the synthetic deny response
       logger.log({
@@ -76,6 +82,7 @@ export function startProxy(opts: ProxyOptions): void {
       });
     } else {
       // Forward to child
+      logDebug(`forwarding ${result.method} (${result.verdict}) to child`);
       relay.sendToChild(line);
     }
   });
@@ -109,7 +116,7 @@ export function startProxy(opts: ProxyOptions): void {
   });
 
   relay.on("error", (err: Error) => {
-    process.stderr.write(`quint: relay error: ${err.message}\n`);
+    logError(`relay error: ${err.message}`);
     db.close();
     process.exit(1);
   });
