@@ -1,6 +1,6 @@
 {
   "name": "@quint-security/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Local security proxy for MCP tool calls",
   "repository": {
