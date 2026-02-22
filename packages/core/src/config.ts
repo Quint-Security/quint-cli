@@ -52,7 +52,12 @@ export function loadPolicy(pathOrDir?: string): PolicyConfig {
   }
 
   const raw = readFileSync(policyPath, "utf-8");
-  const parsed = JSON.parse(raw) as PolicyConfig;
+  let parsed: PolicyConfig;
+  try {
+    parsed = JSON.parse(raw) as PolicyConfig;
+  } catch {
+    throw new Error(`Failed to parse policy file: ${policyPath}`);
+  }
   return {
     ...parsed,
     data_dir: resolveDataDir(parsed.data_dir ?? dir),
@@ -126,7 +131,11 @@ export function globMatch(pattern: string, value: string): boolean {
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
     .replace(/\*/g, ".*")
     .replace(/\?/g, ".");
-  return new RegExp(`^${escaped}$`).test(value);
+  try {
+    return new RegExp(`^${escaped}$`).test(value);
+  } catch {
+    return pattern === value;
+  }
 }
 
 // ── Evaluate policy for a tool call ─────────────────────────────
