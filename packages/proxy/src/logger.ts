@@ -41,7 +41,7 @@ export class AuditLogger {
       const nonce = randomUUID();
       const prevHash = prevSignature ? sha256(prevSignature) : "";
 
-      const signable: Record<string, unknown> = {
+      const entry = {
         timestamp,
         server_name: opts.serverName,
         direction: opts.direction,
@@ -59,27 +59,10 @@ export class AuditLogger {
         public_key: this.publicKey,
       };
 
-      const canonical = canonicalize(signable);
+      const canonical = canonicalize(entry as unknown as Record<string, unknown>);
       const signature = signData(canonical, this.privateKey);
 
-      return {
-        timestamp,
-        server_name: opts.serverName,
-        direction: opts.direction,
-        method: opts.method,
-        message_id: opts.messageId,
-        tool_name: opts.toolName,
-        arguments_json: opts.argumentsJson,
-        response_json: opts.responseJson,
-        verdict: opts.verdict,
-        risk_score: opts.riskScore ?? null,
-        risk_level: opts.riskLevel ?? null,
-        policy_hash: this.policyHash,
-        prev_hash: prevHash,
-        nonce,
-        signature,
-        public_key: this.publicKey,
-      };
+      return { ...entry, signature };
     });
   }
 }
