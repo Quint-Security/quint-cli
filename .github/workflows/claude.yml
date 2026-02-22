@@ -31,6 +31,7 @@ jobs:
           fetch-depth: 1
 
       - name: Checkout engineering skills
+        if: ${{ secrets.ORG_GITHUB_TOKEN != '' }}
         uses: actions/checkout@v4
         with:
           repository: Quint-Security/skills
@@ -40,19 +41,21 @@ jobs:
       - name: Load skills
         id: skills
         run: |
-          {
-            echo 'content<<SKILL_EOF'
-            cat .skills/engineering-guidelines/SKILL.md
-            echo ""
-            echo "---"
-            echo ""
-            cat .skills/typescript-expert/SKILL.md
-            echo ""
-            echo "---"
-            echo ""
-            cat .skills/documentation/SKILL.md
-            echo 'SKILL_EOF'
-          } >> "$GITHUB_OUTPUT"
+          if [ -d .skills ]; then
+            {
+              echo 'content<<SKILL_EOF'
+              cat .skills/engineering-guidelines/SKILL.md
+              echo ""
+              echo "---"
+              echo ""
+              cat .skills/typescript-expert/SKILL.md
+              echo ""
+              echo "---"
+              echo ""
+              cat .skills/documentation/SKILL.md
+              echo 'SKILL_EOF'
+            } >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Run Claude Code
         id: claude
