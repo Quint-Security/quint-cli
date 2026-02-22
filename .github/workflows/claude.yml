@@ -66,4 +66,4 @@ jobs:
           additional_permissions: |
             actions: read
 
-          system_prompt: ${{ steps.skills.outputs.content }}
+          prompt: ${{ steps.skills.outputs.content }}
