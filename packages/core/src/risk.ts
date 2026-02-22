@@ -70,9 +70,9 @@ const DANGEROUS_ARG_KEYWORDS = [
 
 // ── Risk scoring logic ──────────────────────────────────────────
 
-import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { openDatabase, type DatabaseInstance } from "./sqlite.js";
 import { globMatch } from "./config.js";
 
 export interface RiskScore {
@@ -122,11 +122,11 @@ CREATE INDEX IF NOT EXISTS idx_behavior_ts      ON behavior_tracker(timestamp);
 `;
 
 export class BehaviorDb {
-  private db: Database.Database;
+  private db: DatabaseInstance;
 
   constructor(dbPath: string) {
     mkdirSync(dirname(dbPath), { recursive: true });
-    this.db = new Database(dbPath);
+    this.db = openDatabase(dbPath);
     this.db.pragma("journal_mode = WAL");
     this.db.exec(BEHAVIOR_SCHEMA);
   }

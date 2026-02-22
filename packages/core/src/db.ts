@@ -1,6 +1,6 @@
-import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { openDatabase, type DatabaseInstance } from "./sqlite.js";
 import type { AuditEntry } from "./types.js";
 
 const SCHEMA = `
@@ -40,11 +40,11 @@ const MIGRATIONS = [
 ];
 
 export class AuditDb {
-  private db: Database.Database;
+  private db: DatabaseInstance;
 
   constructor(dbPath: string) {
     mkdirSync(dirname(dbPath), { recursive: true });
-    this.db = new Database(dbPath);
+    this.db = openDatabase(dbPath);
     this.db.pragma("journal_mode = WAL");
     this.db.exec(SCHEMA);
     this.migrate();
