@@ -2,6 +2,7 @@ import {
   type PolicyConfig,
   ensureKeyPair,
   openAuditDb,
+  openBehaviorDb,
   resolveDataDir,
   setLogLevel,
   logDebug,
@@ -44,8 +45,9 @@ export function startProxy(opts: ProxyOptions): void {
   // Create audit logger
   const logger = new AuditLogger(db, kp.privateKey, kp.publicKey, opts.policy);
 
-  // Create risk engine
-  const riskEngine = new RiskEngine();
+  // Create risk engine with persistent behavior tracking
+  const behaviorDb = openBehaviorDb(dataDir);
+  const riskEngine = new RiskEngine({ behaviorDb });
 
   // Create relay
   const relay = new Relay(opts.command, opts.args);
@@ -89,7 +91,7 @@ export function startProxy(opts: ProxyOptions): void {
       const risk = riskEngine.score(result.toolName, result.argumentsJson, "anonymous");
       const riskAction = riskEngine.evaluate(risk);
 
-      // Re-log the request with risk score attached
+      // Log the request with risk score attached
       logger.log({
         serverName: opts.serverName,
         direction: "request",
@@ -164,12 +166,14 @@ export function startProxy(opts: ProxyOptions): void {
 
   relay.on("childExit", (code: number | null) => {
     db.close();
+    behaviorDb.close();
     process.exit(code ?? 0);
   });
 
   relay.on("error", (err: Error) => {
     logError(`relay error: ${err.message}`);
     db.close();
+    behaviorDb.close();
     process.exit(1);
   });
 

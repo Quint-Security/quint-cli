@@ -3,6 +3,7 @@ import {
   ensureKeyPair,
   openAuditDb,
   openAuthDb,
+  openBehaviorDb,
   authenticateBearer,
   resolveDataDir,
   setLogLevel,
@@ -41,8 +42,9 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
   // Create audit logger
   const logger = new AuditLogger(db, kp.privateKey, kp.publicKey, opts.policy);
 
-  // Create risk engine
-  const riskEngine = new RiskEngine();
+  // Create risk engine with persistent behavior tracking
+  const behaviorDb = openBehaviorDb(dataDir);
+  const riskEngine = new RiskEngine({ behaviorDb });
 
   // Create HTTP relay (with optional auth)
   const authDb = opts.requireAuth ? openAuthDb(dataDir) : null;
@@ -64,19 +66,19 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
   relay.on("request", (line: string, requestKey: string) => {
     const result = inspectRequest(line, opts.serverName, opts.policy);
 
-    // Log the request
-    logger.log({
-      serverName: opts.serverName,
-      direction: "request",
-      method: result.method,
-      messageId: result.messageId,
-      toolName: result.toolName,
-      argumentsJson: result.argumentsJson,
-      responseJson: null,
-      verdict: result.verdict,
-    });
-
     if (result.verdict === "deny") {
+      // Log the request (policy-denied, no risk scoring needed)
+      logger.log({
+        serverName: opts.serverName,
+        direction: "request",
+        method: result.method,
+        messageId: result.messageId,
+        toolName: result.toolName,
+        argumentsJson: result.argumentsJson,
+        responseJson: null,
+        verdict: result.verdict,
+      });
+
       // Send error response back to agent
       const reqId = result.message && "id" in result.message ? result.message.id : null;
       const errorResponse = buildDenyResponse(reqId ?? null);
@@ -99,6 +101,20 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
       const risk = riskEngine.score(result.toolName, result.argumentsJson, "anonymous");
       const riskAction = riskEngine.evaluate(risk);
 
+      // Log the request with risk score
+      logger.log({
+        serverName: opts.serverName,
+        direction: "request",
+        method: result.method,
+        messageId: result.messageId,
+        toolName: result.toolName,
+        argumentsJson: result.argumentsJson,
+        responseJson: null,
+        verdict: riskAction === "deny" ? "deny" : result.verdict,
+        riskScore: risk.score,
+        riskLevel: risk.level,
+      });
+
       if (riskAction === "deny") {
         // Risk score too high — auto-deny
         const reqId = result.message && "id" in result.message ? result.message.id : null;
@@ -115,6 +131,8 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
           argumentsJson: null,
           responseJson: errorResponse,
           verdict: "deny",
+          riskScore: risk.score,
+          riskLevel: risk.level,
         });
       } else {
         if (riskAction === "flag") {
@@ -129,7 +147,17 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
         logWarn(`repeated high-risk actions detected — consider revoking agent credentials`);
       }
     } else {
-      // Non-tool-call (initialize, tools/list, etc.) — forward directly
+      // Non-tool-call (initialize, tools/list, etc.) — log and forward directly
+      logger.log({
+        serverName: opts.serverName,
+        direction: "request",
+        method: result.method,
+        messageId: result.messageId,
+        toolName: result.toolName,
+        argumentsJson: result.argumentsJson,
+        responseJson: null,
+        verdict: result.verdict,
+      });
       logDebug(`forwarding ${result.method} (${result.verdict}) to remote`);
       relay.forwardToRemote(requestKey);
     }
@@ -163,6 +191,7 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
   const shutdown = () => {
     relay.stop();
     db.close();
+    behaviorDb.close();
     authDb?.close();
     process.exit(0);
   };
