@@ -70,6 +70,9 @@ const DANGEROUS_ARG_KEYWORDS = [
 
 // ── Risk scoring logic ──────────────────────────────────────────
 
+import Database from "better-sqlite3";
+import { mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { globMatch } from "./config.js";
 
 export interface RiskScore {
@@ -105,33 +108,102 @@ const DEFAULT_THRESHOLDS: RiskThresholds = {
   windowMs: 5 * 60 * 1000,
 };
 
+// ── Behavior persistence ────────────────────────────────────────
+
+const BEHAVIOR_SCHEMA = `
+CREATE TABLE IF NOT EXISTS behavior_tracker (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  subject_id  TEXT NOT NULL,
+  timestamp   INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_behavior_subject ON behavior_tracker(subject_id);
+CREATE INDEX IF NOT EXISTS idx_behavior_ts      ON behavior_tracker(timestamp);
+`;
+
+export class BehaviorDb {
+  private db: Database.Database;
+
+  constructor(dbPath: string) {
+    mkdirSync(dirname(dbPath), { recursive: true });
+    this.db = new Database(dbPath);
+    this.db.pragma("journal_mode = WAL");
+    this.db.exec(BEHAVIOR_SCHEMA);
+  }
+
+  record(subjectId: string, timestamp: number): void {
+    this.db.prepare(
+      "INSERT INTO behavior_tracker (subject_id, timestamp) VALUES (?, ?)"
+    ).run(subjectId, timestamp);
+  }
+
+  /** Count entries for subject within the window, and prune older ones. */
+  count(subjectId: string, cutoff: number): number {
+    // Prune old entries
+    this.db.prepare(
+      "DELETE FROM behavior_tracker WHERE subject_id = ? AND timestamp <= ?"
+    ).run(subjectId, cutoff);
+    // Count remaining
+    const row = this.db.prepare(
+      "SELECT COUNT(*) as cnt FROM behavior_tracker WHERE subject_id = ?"
+    ).get(subjectId) as { cnt: number };
+    return row.cnt;
+  }
+
+  close(): void {
+    this.db.close();
+  }
+}
+
+export function openBehaviorDb(dataDir: string): BehaviorDb {
+  return new BehaviorDb(join(dataDir, "behavior.db"));
+}
+
 /**
- * In-memory tracker for repeated high-risk behavior per subject.
+ * Tracker for repeated high-risk behavior per subject.
+ * Uses SQLite for persistence when a BehaviorDb is provided,
+ * falls back to in-memory tracking otherwise.
  */
 class BehaviorTracker {
-  // subjectId → timestamps of high-risk actions
+  // In-memory fallback: subjectId → timestamps of high-risk actions
   private history: Map<string, number[]> = new Map();
   private windowMs: number;
+  private behaviorDb: BehaviorDb | null;
 
-  constructor(windowMs: number) {
+  constructor(windowMs: number, behaviorDb?: BehaviorDb) {
     this.windowMs = windowMs;
+    this.behaviorDb = behaviorDb ?? null;
+  }
+
+  private pruneInMemory(subjectId: string): number[] {
+    const cutoff = Date.now() - this.windowMs;
+    const entries = (this.history.get(subjectId) ?? []).filter((t) => t > cutoff);
+    if (entries.length === 0) {
+      this.history.delete(subjectId);
+    } else {
+      this.history.set(subjectId, entries);
+    }
+    return entries;
   }
 
   record(subjectId: string): void {
     const now = Date.now();
-    const entries = this.history.get(subjectId) ?? [];
-    entries.push(now);
-    this.history.set(subjectId, entries);
+    if (this.behaviorDb) {
+      this.behaviorDb.record(subjectId, now);
+    } else {
+      const entries = this.pruneInMemory(subjectId);
+      entries.push(now);
+      this.history.set(subjectId, entries);
+    }
   }
 
   /** Count of high-risk actions within the sliding window. */
   count(subjectId: string): number {
-    const cutoff = Date.now() - this.windowMs;
-    const entries = this.history.get(subjectId) ?? [];
-    const recent = entries.filter((t) => t > cutoff);
-    // Prune old entries
-    this.history.set(subjectId, recent);
-    return recent.length;
+    if (this.behaviorDb) {
+      const cutoff = Date.now() - this.windowMs;
+      return this.behaviorDb.count(subjectId, cutoff);
+    }
+    return this.pruneInMemory(subjectId).length;
   }
 }
 
@@ -140,9 +212,13 @@ export class RiskEngine {
   private tracker: BehaviorTracker;
   private customPatterns: RiskPattern[];
 
-  constructor(opts?: { thresholds?: Partial<RiskThresholds>; customPatterns?: RiskPattern[] }) {
+  constructor(opts?: {
+    thresholds?: Partial<RiskThresholds>;
+    customPatterns?: RiskPattern[];
+    behaviorDb?: BehaviorDb;
+  }) {
     this.thresholds = { ...DEFAULT_THRESHOLDS, ...opts?.thresholds };
-    this.tracker = new BehaviorTracker(this.thresholds.windowMs);
+    this.tracker = new BehaviorTracker(this.thresholds.windowMs, opts?.behaviorDb);
     this.customPatterns = opts?.customPatterns ?? [];
   }
 
