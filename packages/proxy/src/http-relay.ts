@@ -50,6 +50,7 @@ export class HttpRelay extends EventEmitter {
   private pending: Map<string, PendingRequest> = new Map();
   private requestCounter = 0;
   private authCheck: AuthCheckFn | null = null;
+  private credentialHeader: string | null = null;
 
   constructor(port: number, targetUrl: string, authCheck?: AuthCheckFn) {
     super();
@@ -73,6 +74,10 @@ export class HttpRelay extends EventEmitter {
         resolve();
       });
     });
+  }
+
+  setCredentialHeader(header: string | null): void {
+    this.credentialHeader = header;
   }
 
   stop(): void {
@@ -119,6 +124,8 @@ export class HttpRelay extends EventEmitter {
       };
       if (pending.headers.authorization) {
         forwardHeaders["Authorization"] = pending.headers.authorization;
+      } else if (this.credentialHeader) {
+        forwardHeaders["Authorization"] = this.credentialHeader;
       }
 
       const remoteRes = await fetch(this.targetUrl, {

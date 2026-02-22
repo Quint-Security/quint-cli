@@ -7,3 +7,4 @@ export * from "./config.js";
 export * from "./log.js";
 export * from "./risk.js";
 export * from "./rate-limit.js";
+export * from "./credential-store.js";
