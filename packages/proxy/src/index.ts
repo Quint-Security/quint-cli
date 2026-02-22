@@ -55,61 +55,28 @@ export function startProxy(opts: ProxyOptions): void {
   // ── Handle messages from parent (AI agent) → child (MCP server) ──
 
   relay.on("parentMessage", (line: string) => {
-    const result = inspectRequest(line, opts.serverName, opts.policy);
+    try {
+      const result = inspectRequest(line, opts.serverName, opts.policy);
 
-    // For non-tool-call requests, log immediately. Tool calls get logged after risk scoring.
-    if (!result.toolName || result.verdict === "deny") {
-      logger.log({
-        serverName: opts.serverName,
-        direction: "request",
-        method: result.method,
-        messageId: result.messageId,
-        toolName: result.toolName,
-        argumentsJson: result.argumentsJson,
-        responseJson: null,
-        verdict: result.verdict,
-      });
-    }
+      // For non-tool-call requests, log immediately. Tool calls get logged after risk scoring.
+      if (!result.toolName || result.verdict === "deny") {
+        logger.log({
+          serverName: opts.serverName,
+          direction: "request",
+          method: result.method,
+          messageId: result.messageId,
+          toolName: result.toolName,
+          argumentsJson: result.argumentsJson,
+          responseJson: null,
+          verdict: result.verdict,
+        });
+      }
 
-    if (result.verdict === "deny") {
-      const reqId = result.message && "id" in result.message ? result.message.id : null;
-      const errorResponse = buildDenyResponse(reqId ?? null);
-      relay.sendToParent(errorResponse);
-      logInfo(`denied ${result.toolName} on ${opts.serverName}`);
-
-      logger.log({
-        serverName: opts.serverName,
-        direction: "response",
-        method: result.method,
-        messageId: result.messageId,
-        toolName: result.toolName,
-        argumentsJson: null,
-        responseJson: errorResponse,
-        verdict: "deny",
-      });
-    } else if (result.toolName) {
-      const risk = riskEngine.score(result.toolName, result.argumentsJson, "anonymous");
-      const riskAction = riskEngine.evaluate(risk);
-
-      // Log the request with risk score attached
-      logger.log({
-        serverName: opts.serverName,
-        direction: "request",
-        method: result.method,
-        messageId: result.messageId,
-        toolName: result.toolName,
-        argumentsJson: result.argumentsJson,
-        responseJson: null,
-        verdict: result.verdict,
-        riskScore: risk.score,
-        riskLevel: risk.level,
-      });
-
-      if (riskAction === "deny") {
+      if (result.verdict === "deny") {
         const reqId = result.message && "id" in result.message ? result.message.id : null;
         const errorResponse = buildDenyResponse(reqId ?? null);
         relay.sendToParent(errorResponse);
-        logWarn(`risk-denied ${result.toolName} (score=${risk.score}, level=${risk.level}): ${risk.reasons.join("; ")}`);
+        logInfo(`denied ${result.toolName} on ${opts.serverName}`);
 
         logger.log({
           serverName: opts.serverName,
@@ -120,23 +87,63 @@ export function startProxy(opts: ProxyOptions): void {
           argumentsJson: null,
           responseJson: errorResponse,
           verdict: "deny",
+        });
+      } else if (result.toolName) {
+        const risk = riskEngine.score(result.toolName, result.argumentsJson, "anonymous");
+        const riskAction = riskEngine.evaluate(risk);
+
+        // Log the request with risk score attached
+        logger.log({
+          serverName: opts.serverName,
+          direction: "request",
+          method: result.method,
+          messageId: result.messageId,
+          toolName: result.toolName,
+          argumentsJson: result.argumentsJson,
+          responseJson: null,
+          verdict: result.verdict,
           riskScore: risk.score,
           riskLevel: risk.level,
         });
-      } else {
-        if (riskAction === "flag") {
-          logWarn(`high-risk ${result.toolName} (score=${risk.score}, level=${risk.level}): ${risk.reasons.join("; ")}`);
+
+        if (riskAction === "deny") {
+          const reqId = result.message && "id" in result.message ? result.message.id : null;
+          const errorResponse = buildDenyResponse(reqId ?? null);
+          relay.sendToParent(errorResponse);
+          logWarn(`risk-denied ${result.toolName} (score=${risk.score}, level=${risk.level}): ${risk.reasons.join("; ")}`);
+
+          logger.log({
+            serverName: opts.serverName,
+            direction: "response",
+            method: result.method,
+            messageId: result.messageId,
+            toolName: result.toolName,
+            argumentsJson: null,
+            responseJson: errorResponse,
+            verdict: "deny",
+            riskScore: risk.score,
+            riskLevel: risk.level,
+          });
+        } else {
+          if (riskAction === "flag") {
+            logWarn(`high-risk ${result.toolName} (score=${risk.score}, level=${risk.level}): ${risk.reasons.join("; ")}`);
+          }
+          logDebug(`forwarding ${result.method} (risk=${risk.score}) to child`);
+          relay.sendToChild(line);
         }
-        logDebug(`forwarding ${result.method} (risk=${risk.score}) to child`);
+
+        if (riskEngine.shouldRevoke("anonymous")) {
+          logWarn(`repeated high-risk actions detected — consider revoking agent credentials`);
+        }
+      } else {
+        // Non-tool-call — forward directly
+        logDebug(`forwarding ${result.method} (${result.verdict}) to child`);
         relay.sendToChild(line);
       }
-
-      if (riskEngine.shouldRevoke("anonymous")) {
-        logWarn(`repeated high-risk actions detected — consider revoking agent credentials`);
-      }
-    } else {
-      // Non-tool-call — forward directly
-      logDebug(`forwarding ${result.method} (${result.verdict}) to child`);
+    } catch (err) {
+      // Fail-open: if Quint's own processing throws, forward the message
+      // rather than silently dropping it. Log the error but don't break the pipe.
+      logError(`error processing request: ${err instanceof Error ? err.message : err}`);
       relay.sendToChild(line);
     }
   });
@@ -144,21 +151,25 @@ export function startProxy(opts: ProxyOptions): void {
   // ── Handle messages from child (MCP server) → parent (AI agent) ──
 
   relay.on("childMessage", (line: string) => {
-    const result = inspectResponse(line);
+    try {
+      const result = inspectResponse(line);
 
-    // Log the response
-    logger.log({
-      serverName: opts.serverName,
-      direction: "response",
-      method: result.method,
-      messageId: result.messageId,
-      toolName: null,
-      argumentsJson: null,
-      responseJson: result.responseJson,
-      verdict: "passthrough",
-    });
+      logger.log({
+        serverName: opts.serverName,
+        direction: "response",
+        method: result.method,
+        messageId: result.messageId,
+        toolName: null,
+        argumentsJson: null,
+        responseJson: result.responseJson,
+        verdict: "passthrough",
+      });
+    } catch (err) {
+      // Don't let logging failures block responses from reaching the agent
+      logError(`error processing response: ${err instanceof Error ? err.message : err}`);
+    }
 
-    // Always forward responses to parent
+    // Always forward responses to parent — even if logging failed
     relay.sendToParent(line);
   });
 
@@ -176,6 +187,19 @@ export function startProxy(opts: ProxyOptions): void {
     behaviorDb.close();
     process.exit(1);
   });
+
+  // Ensure DBs close on unexpected termination
+  const cleanup = () => {
+    try { db.close(); } catch { /* already closed */ }
+    try { behaviorDb.close(); } catch { /* already closed */ }
+  };
+  process.on("uncaughtException", (err) => {
+    logError(`uncaught exception: ${err.message}`);
+    cleanup();
+    process.exit(1);
+  });
+  process.on("SIGTERM", () => { cleanup(); process.exit(0); });
+  process.on("SIGINT", () => { cleanup(); process.exit(0); });
 
   // Start
   relay.start();

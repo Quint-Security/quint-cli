@@ -185,7 +185,12 @@ function generateWrappedConfig(server: DetectedServer): ClaudeMcpServer | null {
 function applyToClaudeConfig(servers: DetectedServer[]): { applied: number; path: string } {
   const claudeConfigPath = join(homedir(), ".claude.json");
   const raw = readFileSync(claudeConfigPath, "utf-8");
-  const config = JSON.parse(raw);
+  let config: Record<string, any>;
+  try {
+    config = JSON.parse(raw);
+  } catch (e) {
+    throw new Error(`Failed to parse ${claudeConfigPath}: ${e instanceof Error ? e.message : e}`);
+  }
 
   let applied = 0;
 
@@ -264,7 +269,13 @@ export const initCommand = new Command("init")
 
       const claudeConfigPath = join(homedir(), ".claude.json");
       const raw = readFileSync(claudeConfigPath, "utf-8");
-      const config = JSON.parse(raw);
+      let config: Record<string, any>;
+      try {
+        config = JSON.parse(raw);
+      } catch (e) {
+        console.error(`Failed to parse ${claudeConfigPath}: ${e instanceof Error ? e.message : e}`);
+        process.exit(1);
+      }
 
       let reverted = 0;
       for (const s of proxied) {
