@@ -27,6 +27,8 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           scope: '@quint-security'
+      - name: Remove repo .npmrc to use registry from setup-node
+        run: rm -f .npmrc
       - run: npm ci
       - run: npm run build
       - name: Set version from tag
