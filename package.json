@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "build": "npx tsc -b packages/core packages/proxy packages/cli test",
-    "test": "node --test dist/test/crypto.test.js dist/test/db.test.js dist/test/policy.test.js dist/test/interceptor.test.js dist/test/chain.test.js dist/test/proxy.test.js dist/test/http-proxy.test.js dist/test/auth.test.js dist/test/auth-proxy.test.js dist/test/risk.test.js dist/test/init.test.js dist/test/rate-limit.test.js",
+    "test": "node --test dist/test/crypto.test.js dist/test/db.test.js dist/test/policy.test.js dist/test/interceptor.test.js dist/test/chain.test.js dist/test/proxy.test.js dist/test/http-proxy.test.js dist/test/auth.test.js dist/test/auth-proxy.test.js dist/test/risk.test.js dist/test/init.test.js dist/test/rate-limit.test.js dist/test/credential-store.test.js",
     "clean": "rm -rf packages/*/dist dist"
   },
   "publishConfig": {

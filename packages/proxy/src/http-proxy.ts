@@ -13,6 +13,8 @@ import {
   logError,
   RiskEngine,
   RateLimiter,
+  openCredentialStore,
+  deriveCredentialKey,
 } from "@quint-security/core";
 import { HttpRelay } from "./http-relay.js";
 import { inspectRequest, inspectResponse, buildDenyResponse } from "./interceptor.js";
@@ -74,6 +76,20 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
     // Pass subjectId through to the request handler for rate limiting
     return { subjectId: result.subjectId, rateLimitRpm: result.rateLimitRpm };
   } : undefined);
+
+  // ── Load stored credentials for auto-injection ──
+  let credStore: ReturnType<typeof openCredentialStore> | null = null;
+  try {
+    const credKey = deriveCredentialKey(passphrase, kp.privateKey);
+    credStore = openCredentialStore(dataDir, credKey);
+    const storedToken = credStore.getAccessToken(opts.serverName);
+    if (storedToken) {
+      relay.setCredentialHeader(`Bearer ${storedToken}`);
+      logInfo(`loaded stored credential for "${opts.serverName}"`);
+    }
+  } catch {
+    logDebug(`no stored credentials available for "${opts.serverName}"`);
+  }
 
   // ── Handle requests from agent → remote MCP server ──
 
@@ -247,6 +263,7 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
     db.close();
     behaviorDb.close();
     authDb?.close();
+    credStore?.close();
     process.exit(0);
   };
 
