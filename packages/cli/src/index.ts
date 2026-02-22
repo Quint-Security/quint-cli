@@ -11,6 +11,7 @@ import { statusCommand } from "./commands/status.js";
 import { authCommand } from "./commands/auth.js";
 import { initCommand } from "./commands/init.js";
 import { connectCommand } from "./commands/connect.js";
+import { dashboardCommand } from "./commands/dashboard.js";
 
 const program = new Command()
   .name("quint")
@@ -27,5 +28,6 @@ program.addCommand(policyCommand);
 program.addCommand(statusCommand);
 program.addCommand(authCommand);
 program.addCommand(connectCommand);
+program.addCommand(dashboardCommand);
 
 program.parse();
