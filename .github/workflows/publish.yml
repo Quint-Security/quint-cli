@@ -32,6 +32,11 @@ jobs:
           scope: '@quint-security'
       - run: npm ci
       - run: npm run build
+      - name: Set version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Publishing version $VERSION"
+          npm version "$VERSION" --no-git-tag-version --workspace packages/core --workspace packages/proxy --workspace packages/cli
       - run: npm publish --workspace packages/core
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
