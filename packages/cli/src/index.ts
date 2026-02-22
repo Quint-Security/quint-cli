@@ -9,12 +9,14 @@ import { verifyCommand } from "./commands/verify.js";
 import { policyCommand } from "./commands/policy.js";
 import { statusCommand } from "./commands/status.js";
 import { authCommand } from "./commands/auth.js";
+import { initCommand } from "./commands/init.js";
 
 const program = new Command()
   .name("quint")
   .version("0.1.0")
   .description("Local security proxy for MCP tool calls");
 
+program.addCommand(initCommand);
 program.addCommand(proxyCommand);
 program.addCommand(httpProxyCommand);
 program.addCommand(logsCommand);
