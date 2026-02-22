@@ -163,6 +163,13 @@ export class AuditDb {
     ).all(params) as AuditEntry[];
   }
 
+  /** Get entries with id > afterId, in ascending order, with a limit */
+  getAfterId(afterId: number, limit: number): AuditEntry[] {
+    return this.db.prepare(
+      "SELECT * FROM audit_log WHERE id > ? ORDER BY id ASC LIMIT ?"
+    ).all(afterId, limit) as AuditEntry[];
+  }
+
   getLast(n: number): AuditEntry[] {
     return this.db.prepare(
       "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?"

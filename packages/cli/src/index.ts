@@ -12,6 +12,7 @@ import { authCommand } from "./commands/auth.js";
 import { initCommand } from "./commands/init.js";
 import { connectCommand } from "./commands/connect.js";
 import { dashboardCommand } from "./commands/dashboard.js";
+import { syncCommand } from "./commands/sync.js";
 
 const program = new Command()
   .name("quint")
@@ -29,5 +30,6 @@ program.addCommand(statusCommand);
 program.addCommand(authCommand);
 program.addCommand(connectCommand);
 program.addCommand(dashboardCommand);
+program.addCommand(syncCommand);
 
 program.parse();
