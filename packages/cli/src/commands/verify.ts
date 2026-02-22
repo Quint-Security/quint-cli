@@ -94,6 +94,9 @@ export const verifyCommand = new Command("verify")
   });
 
 function verifyEntry(entry: AuditEntry): boolean {
+  // Build the signable object matching what the logger used at signing time.
+  // risk_score/risk_level were added later — only include them if the entry
+  // was signed with them (non-null), otherwise the canonical form won't match.
   const signable: Record<string, unknown> = {
     timestamp: entry.timestamp,
     server_name: entry.server_name,
@@ -104,13 +107,17 @@ function verifyEntry(entry: AuditEntry): boolean {
     arguments_json: entry.arguments_json,
     response_json: entry.response_json,
     verdict: entry.verdict,
-    risk_score: entry.risk_score ?? null,
-    risk_level: entry.risk_level ?? null,
     policy_hash: entry.policy_hash ?? "",
     prev_hash: entry.prev_hash ?? "",
     nonce: entry.nonce ?? "",
     public_key: entry.public_key,
   };
+
+  // Only include risk fields if they were present when signed
+  if (entry.risk_score !== null && entry.risk_score !== undefined) {
+    signable.risk_score = entry.risk_score;
+    signable.risk_level = entry.risk_level;
+  }
 
   const canonical = canonicalize(signable);
   return verifySignature(canonical, entry.signature, entry.public_key);
