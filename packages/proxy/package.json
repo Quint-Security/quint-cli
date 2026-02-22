@@ -9,7 +9,7 @@
     "directory": "packages/proxy"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
   },
   "scripts": {
     "build": "tsc"
