@@ -14,13 +14,25 @@ interface PendingRequest {
   res: ServerResponse;
   body: string;
   headers: Record<string, string>;
+  subjectId: string;
+}
+
+/**
+ * Auth check result. Return an object with error to reject (401),
+ * or with subjectId/rateLimitRpm to attach metadata to the request.
+ * Returning null/undefined means auth passed with no metadata.
+ */
+export interface AuthCheckResult {
+  error?: string;
+  subjectId?: string;
+  rateLimitRpm?: number | null;
 }
 
 /**
  * Optional auth check function. Return null/undefined if auth passes,
- * or an error message string to reject the request with 401.
+ * a string error message to reject with 401, or an AuthCheckResult object.
  */
-export type AuthCheckFn = (req: IncomingMessage) => string | undefined | null;
+export type AuthCheckFn = (req: IncomingMessage) => string | AuthCheckResult | undefined | null;
 
 /**
  * HttpRelay manages:
@@ -76,6 +88,18 @@ export class HttpRelay extends EventEmitter {
     this.pending.delete(requestKey);
 
     pending.res.writeHead(200, { "Content-Type": "application/json" });
+    pending.res.end(body);
+  }
+
+  /**
+   * Send a response with a custom HTTP status code and headers.
+   */
+  respondWithStatus(requestKey: string, statusCode: number, headers: Record<string, string>, body: string): void {
+    const pending = this.pending.get(requestKey);
+    if (!pending) return;
+    this.pending.delete(requestKey);
+
+    pending.res.writeHead(statusCode, { "Content-Type": "application/json", ...headers });
     pending.res.end(body);
   }
 
@@ -187,8 +211,12 @@ export class HttpRelay extends EventEmitter {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
     // Auth check (if configured)
+    let authSubjectId = "anonymous";
     if (this.authCheck) {
-      const authError = this.authCheck(req);
+      const authResult = this.authCheck(req);
+      const authError = typeof authResult === "string"
+        ? authResult
+        : authResult?.error ?? null;
       if (authError) {
         res.writeHead(401, { "Content-Type": "application/json" });
         res.end(JSON.stringify({
@@ -197,6 +225,9 @@ export class HttpRelay extends EventEmitter {
           error: { code: -32600, message: authError },
         }));
         return;
+      }
+      if (typeof authResult === "object" && authResult) {
+        if (authResult.subjectId) authSubjectId = authResult.subjectId;
       }
     }
 
@@ -213,12 +244,13 @@ export class HttpRelay extends EventEmitter {
         if (typeof val === "string") headers[key] = val;
       }
 
-      this.pending.set(requestKey, { res, body, headers });
+      this.pending.set(requestKey, { res, body, headers, subjectId: authSubjectId });
 
       // Emit the request for the interceptor to inspect.
       // The interceptor will call respondToClient() for denials
       // or forwardToRemote() for allowed requests.
-      this.emit("request", body, requestKey);
+      // Third argument is the authenticated subject ID (for rate limiting).
+      this.emit("request", body, requestKey, authSubjectId);
     });
 
     req.on("error", (err) => {

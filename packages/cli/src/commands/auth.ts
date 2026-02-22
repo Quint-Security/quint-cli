@@ -101,3 +101,39 @@ authCommand
 
     db.close();
   });
+
+authCommand
+  .command("set-rate-limit")
+  .description("Set a per-key rate limit (requests per minute)")
+  .requiredOption("--id <id>", "API key ID")
+  .requiredOption("--rpm <number>", "Requests per minute (0 = use global default)")
+  .action((opts: { id: string; rpm: string }) => {
+    const policy = loadPolicy();
+    const dataDir = resolveDataDir(policy.data_dir);
+    const db = openAuthDb(dataDir);
+
+    const key = db.getApiKeyById(opts.id);
+    if (!key) {
+      console.error(`API key not found: ${opts.id}`);
+      db.close();
+      process.exit(1);
+    }
+
+    const rpm = parseInt(opts.rpm, 10);
+    if (isNaN(rpm) || rpm < 0) {
+      console.error(`Invalid RPM value: ${opts.rpm}. Must be a non-negative integer.`);
+      db.close();
+      process.exit(1);
+    }
+
+    const effectiveRpm = rpm === 0 ? null : rpm;
+    db.setRateLimit(opts.id, effectiveRpm);
+
+    if (effectiveRpm === null) {
+      console.log(`Cleared per-key rate limit for ${opts.id} (${key.label}). Will use global default.`);
+    } else {
+      console.log(`Set rate limit for ${opts.id} (${key.label}) to ${effectiveRpm} requests/minute.`);
+    }
+
+    db.close();
+  });

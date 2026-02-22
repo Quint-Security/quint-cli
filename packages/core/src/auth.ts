@@ -34,6 +34,7 @@ export function generateApiKey(
     created_at: now,
     expires_at: expiresAt,
     revoked: false,
+    rate_limit_rpm: null,
   };
 
   db.insertApiKey(apiKey);
@@ -96,17 +97,29 @@ export function validateSession(db: AuthDb, token: string): Session | undefined 
 export function authenticateBearer(
   db: AuthDb,
   token: string,
-): { type: "api_key" | "session"; subjectId: string; scopes: string } | undefined {
+): { type: "api_key" | "session"; subjectId: string; scopes: string; rateLimitRpm: number | null } | undefined {
   // Try as session first (UUIDs are shorter, faster lookup)
   const session = validateSession(db, token);
   if (session) {
-    return { type: "session", subjectId: session.subject_id, scopes: session.scopes };
+    // Look up the originating API key to inherit its rate limit
+    const originKey = db.getApiKeyById(session.subject_id);
+    return {
+      type: "session",
+      subjectId: session.subject_id,
+      scopes: session.scopes,
+      rateLimitRpm: originKey?.rate_limit_rpm ?? null,
+    };
   }
 
   // Try as raw API key
   const key = verifyApiKey(db, token);
   if (key) {
-    return { type: "api_key", subjectId: key.id, scopes: key.scopes };
+    return {
+      type: "api_key",
+      subjectId: key.id,
+      scopes: key.scopes,
+      rateLimitRpm: key.rate_limit_rpm,
+    };
   }
 
   return undefined;

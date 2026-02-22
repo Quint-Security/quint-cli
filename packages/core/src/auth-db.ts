@@ -5,14 +5,15 @@ import type { ApiKey, Session } from "./types.js";
 
 const AUTH_SCHEMA = `
 CREATE TABLE IF NOT EXISTS api_keys (
-  id          TEXT PRIMARY KEY,
-  key_hash    TEXT NOT NULL UNIQUE,
-  owner_id    TEXT NOT NULL,
-  label       TEXT NOT NULL,
-  scopes      TEXT NOT NULL DEFAULT '',
-  created_at  TEXT NOT NULL,
-  expires_at  TEXT,
-  revoked     INTEGER NOT NULL DEFAULT 0
+  id              TEXT PRIMARY KEY,
+  key_hash        TEXT NOT NULL UNIQUE,
+  owner_id        TEXT NOT NULL,
+  label           TEXT NOT NULL,
+  scopes          TEXT NOT NULL DEFAULT '',
+  created_at      TEXT NOT NULL,
+  expires_at      TEXT,
+  revoked         INTEGER NOT NULL DEFAULT 0,
+  rate_limit_rpm  INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -44,11 +45,12 @@ export class AuthDb {
 
   insertApiKey(key: ApiKey): void {
     this.db.prepare(`
-      INSERT INTO api_keys (id, key_hash, owner_id, label, scopes, created_at, expires_at, revoked)
-      VALUES (@id, @key_hash, @owner_id, @label, @scopes, @created_at, @expires_at, @revoked)
+      INSERT INTO api_keys (id, key_hash, owner_id, label, scopes, created_at, expires_at, revoked, rate_limit_rpm)
+      VALUES (@id, @key_hash, @owner_id, @label, @scopes, @created_at, @expires_at, @revoked, @rate_limit_rpm)
     `).run({
       ...key,
       revoked: key.revoked ? 1 : 0,
+      rate_limit_rpm: key.rate_limit_rpm ?? null,
     });
   }
 
@@ -57,7 +59,7 @@ export class AuthDb {
       "SELECT * FROM api_keys WHERE key_hash = ?"
     ).get(keyHash) as (Omit<ApiKey, "revoked"> & { revoked: number }) | undefined;
     if (!row) return undefined;
-    return { ...row, revoked: row.revoked === 1 };
+    return { ...row, revoked: row.revoked === 1, rate_limit_rpm: row.rate_limit_rpm ?? null };
   }
 
   getApiKeyById(id: string): ApiKey | undefined {
@@ -65,7 +67,7 @@ export class AuthDb {
       "SELECT * FROM api_keys WHERE id = ?"
     ).get(id) as (Omit<ApiKey, "revoked"> & { revoked: number }) | undefined;
     if (!row) return undefined;
-    return { ...row, revoked: row.revoked === 1 };
+    return { ...row, revoked: row.revoked === 1, rate_limit_rpm: row.rate_limit_rpm ?? null };
   }
 
   listApiKeys(ownerId?: string): ApiKey[] {
@@ -76,13 +78,20 @@ export class AuthDb {
       ? this.db.prepare(query).all(ownerId)
       : this.db.prepare(query).all()
     ) as Array<Omit<ApiKey, "revoked"> & { revoked: number }>;
-    return rows.map((r) => ({ ...r, revoked: r.revoked === 1 }));
+    return rows.map((r) => ({ ...r, revoked: r.revoked === 1, rate_limit_rpm: r.rate_limit_rpm ?? null }));
   }
 
   revokeApiKey(id: string): boolean {
     const result = this.db.prepare(
       "UPDATE api_keys SET revoked = 1 WHERE id = ?"
     ).run(id);
+    return result.changes > 0;
+  }
+
+  setRateLimit(id: string, rpm: number | null): boolean {
+    const result = this.db.prepare(
+      "UPDATE api_keys SET rate_limit_rpm = ? WHERE id = ?"
+    ).run(rpm, id);
     return result.changes > 0;
   }
 

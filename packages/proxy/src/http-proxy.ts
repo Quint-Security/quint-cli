@@ -12,6 +12,7 @@ import {
   logWarn,
   logError,
   RiskEngine,
+  RateLimiter,
 } from "@quint-security/core";
 import { HttpRelay } from "./http-relay.js";
 import { inspectRequest, inspectResponse, buildDenyResponse } from "./interceptor.js";
@@ -46,25 +47,77 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
   const behaviorDb = openBehaviorDb(dataDir);
   const riskEngine = new RiskEngine({ behaviorDb });
 
-  // Create HTTP relay (with optional auth)
+  // Create rate limiter from policy config
+  const rateLimitConfig = opts.policy.rate_limit;
+  const rateLimiter = new RateLimiter({
+    rpm: rateLimitConfig?.rpm ?? 60,
+    burst: rateLimitConfig?.burst ?? 10,
+  });
+
+  // Create HTTP relay (with optional auth + rate limit metadata propagation)
   const authDb = opts.requireAuth ? openAuthDb(dataDir) : null;
   const relay = new HttpRelay(opts.port, opts.targetUrl, opts.requireAuth ? (req) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return "Quint: missing or invalid Authorization header. Use: Bearer <api-key>";
+      return { error: "Quint: missing or invalid Authorization header. Use: Bearer <api-key>" };
     }
     const token = authHeader.slice(7);
     const result = authenticateBearer(authDb!, token);
     if (!result) {
-      return "Quint: invalid or expired API key";
+      return { error: "Quint: invalid or expired API key" };
     }
-    return null;
+    // Configure per-key rate limit override if present
+    if (result.rateLimitRpm !== null && result.rateLimitRpm !== undefined) {
+      rateLimiter.setKeyLimit(result.subjectId, result.rateLimitRpm);
+    }
+    // Pass subjectId through to the request handler for rate limiting
+    return { subjectId: result.subjectId, rateLimitRpm: result.rateLimitRpm };
   } : undefined);
 
   // ── Handle requests from agent → remote MCP server ──
 
-  relay.on("request", (line: string, requestKey: string) => {
+  relay.on("request", (line: string, requestKey: string, subjectId: string) => {
     const result = inspectRequest(line, opts.serverName, opts.policy);
+
+    // ── Rate limiting (after auth, before policy/risk) ──
+    const rateLimitKey = subjectId || "anonymous";
+    const rlResult = rateLimiter.check(rateLimitKey);
+    if (!rlResult.allowed) {
+      logger.log({
+        serverName: opts.serverName,
+        direction: "request",
+        method: result.method,
+        messageId: result.messageId,
+        toolName: result.toolName,
+        argumentsJson: result.argumentsJson,
+        responseJson: null,
+        verdict: "rate_limited",
+      });
+
+      const reqId = result.message && "id" in result.message ? result.message.id : null;
+      const errorBody = JSON.stringify({
+        jsonrpc: "2.0",
+        id: reqId ?? null,
+        error: {
+          code: -32600,
+          message: `Quint: rate limit exceeded (${rlResult.used}/${rlResult.limit} requests per minute)`,
+        },
+      });
+      relay.respondWithStatus(requestKey, 429, { "Retry-After": String(rlResult.retryAfterSecs) }, errorBody);
+      logWarn(`rate-limited ${rateLimitKey} (${rlResult.used}/${rlResult.limit} rpm, retry after ${rlResult.retryAfterSecs}s)`);
+
+      logger.log({
+        serverName: opts.serverName,
+        direction: "response",
+        method: result.method,
+        messageId: result.messageId,
+        toolName: result.toolName,
+        argumentsJson: null,
+        responseJson: errorBody,
+        verdict: "rate_limited",
+      });
+      return;
+    }
 
     if (result.verdict === "deny") {
       // Log the request (policy-denied, no risk scoring needed)
