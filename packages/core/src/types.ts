@@ -32,7 +32,7 @@ export interface McpToolCallParams {
 // ── Policy types ────────────────────────────────────────────────
 
 export type Action = "allow" | "deny";
-export type Verdict = "allow" | "deny" | "passthrough";
+export type Verdict = "allow" | "deny" | "passthrough" | "rate_limited";
 
 export interface ToolRule {
   tool: string;
@@ -45,11 +45,20 @@ export interface ServerPolicy {
   tools: ToolRule[];
 }
 
+export interface RateLimitConfig {
+  /** Requests per minute (default: 60) */
+  rpm: number;
+  /** Burst allowance — extra requests allowed in short bursts (default: 10) */
+  burst: number;
+}
+
 export interface PolicyConfig {
   version: number;
   data_dir: string;
   log_level: "debug" | "info" | "warn" | "error";
   servers: ServerPolicy[];
+  /** Global rate limit defaults. Per-key overrides live in the auth DB. */
+  rate_limit?: RateLimitConfig;
 }
 
 // ── Audit log types ─────────────────────────────────────────────
@@ -85,6 +94,7 @@ export interface ApiKey {
   created_at: string;   // ISO-8601
   expires_at: string | null;  // ISO-8601 or null for no expiry
   revoked: boolean;
+  rate_limit_rpm: number | null;  // Per-key requests-per-minute override (null = use global default)
 }
 
 export interface Session {
