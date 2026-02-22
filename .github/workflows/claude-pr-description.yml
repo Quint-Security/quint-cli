@@ -18,11 +18,10 @@ jobs:
           fetch-depth: 0
 
       - name: Checkout engineering skills
-        if: ${{ secrets.ORG_GITHUB_TOKEN != '' }}
         uses: actions/checkout@v4
         with:
           repository: Quint-Security/skills
-          token: ${{ secrets.ORG_GITHUB_TOKEN }}
+          token: ${{ secrets.GH_PAT }}
           path: .skills
 
       - name: Load documentation skill
