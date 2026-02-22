@@ -8,6 +8,10 @@ import {
   saveKeyPair,
   loadKeyPair,
   ensureKeyPair,
+  encryptPrivateKey,
+  decryptPrivateKey,
+  isEncryptedKey,
+  isKeyEncrypted,
 } from "@quint-security/core";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -77,6 +81,101 @@ describe("crypto", () => {
       const kp2 = ensureKeyPair(dir);
       assert.equal(kp1.publicKey, kp2.publicKey);
       assert.equal(kp1.privateKey, kp2.privateKey);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+});
+
+describe("keystore encryption", () => {
+  it("encrypts and decrypts a private key", () => {
+    const kp = generateKeyPair();
+    const encrypted = encryptPrivateKey(kp.privateKey, "testpass123");
+    assert.ok(isEncryptedKey(encrypted));
+    assert.ok(encrypted.startsWith("QUINT-ENC-V1:"));
+
+    const decrypted = decryptPrivateKey(encrypted, "testpass123");
+    assert.equal(decrypted, kp.privateKey);
+  });
+
+  it("returns null for wrong passphrase", () => {
+    const kp = generateKeyPair();
+    const encrypted = encryptPrivateKey(kp.privateKey, "correct");
+    const decrypted = decryptPrivateKey(encrypted, "wrong");
+    assert.equal(decrypted, null);
+  });
+
+  it("plaintext PEM is not detected as encrypted", () => {
+    const kp = generateKeyPair();
+    assert.ok(!isEncryptedKey(kp.privateKey));
+  });
+
+  it("save and load with encryption round-trips", () => {
+    const dir = mkdtempSync(join(tmpdir(), "quint-test-"));
+    try {
+      const kp = generateKeyPair();
+      saveKeyPair(dir, kp, "mypassphrase");
+
+      assert.ok(isKeyEncrypted(dir));
+
+      const loaded = loadKeyPair(dir, "mypassphrase");
+      assert.ok(loaded);
+      assert.equal(loaded.publicKey, kp.publicKey);
+      assert.equal(loaded.privateKey, kp.privateKey);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("throws on encrypted key without passphrase", () => {
+    const dir = mkdtempSync(join(tmpdir(), "quint-test-"));
+    try {
+      const kp = generateKeyPair();
+      saveKeyPair(dir, kp, "secret");
+
+      assert.throws(() => loadKeyPair(dir), /Provide a passphrase/);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("throws on encrypted key with wrong passphrase", () => {
+    const dir = mkdtempSync(join(tmpdir(), "quint-test-"));
+    try {
+      const kp = generateKeyPair();
+      saveKeyPair(dir, kp, "correct");
+
+      assert.throws(() => loadKeyPair(dir, "wrong"), /Wrong passphrase/);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("loads plaintext keys without passphrase (backward compat)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "quint-test-"));
+    try {
+      const kp = generateKeyPair();
+      saveKeyPair(dir, kp); // no passphrase
+
+      assert.ok(!isKeyEncrypted(dir));
+
+      const loaded = loadKeyPair(dir);
+      assert.ok(loaded);
+      assert.equal(loaded.privateKey, kp.privateKey);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("encrypted key can still sign and verify", () => {
+    const dir = mkdtempSync(join(tmpdir(), "quint-test-"));
+    try {
+      const kp = generateKeyPair();
+      saveKeyPair(dir, kp, "pass");
+
+      const loaded = loadKeyPair(dir, "pass")!;
+      const sig = signData("test data", loaded.privateKey);
+      assert.ok(verifySignature("test data", sig, loaded.publicKey));
     } finally {
       rmSync(dir, { recursive: true });
     }

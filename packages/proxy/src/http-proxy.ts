@@ -35,7 +35,8 @@ export async function startHttpProxy(opts: HttpProxyOptions): Promise<void> {
   const dataDir = resolveDataDir(opts.policy.data_dir);
 
   // Ensure signing keys exist
-  const kp = ensureKeyPair(dataDir);
+  const passphrase = process.env.QUINT_PASSPHRASE;
+  const kp = ensureKeyPair(dataDir, passphrase);
 
   // Open audit database
   const db = openAuditDb(dataDir);
